@@ -1,0 +1,36 @@
+# ==================================
+# Backend .gitignore (Go)
+# ==================================
+
+# Environment variables (SENSITIF!)
+.env
+
+# Compiled binary
+main
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build cache & test
+*.test
+*.out
+*.prof
+
+# Vendor (jika tidak commit vendor)
+# vendor/
+
+# Upload files (user-generated content)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,20 @@
+# ==================================
+# Root .gitignore (project-course)
+# ==================================
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Agent files
+.agents/
+skills-lock.json
+AGENTS.md
+CLAUDE.md
