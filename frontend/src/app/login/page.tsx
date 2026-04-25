@@ -150,14 +150,14 @@ export default function LoginPage() {
             <div className="relative my-6">
               <Separator />
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
-                Mode Development
+                Mode Coba Langsung
               </span>
             </div>
 
             {/* Dev Role Selector */}
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground text-center">
-                Pilih role untuk testing
+                Pilih role untuk mencoba
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {roles.map(({ role, label, icon: Icon, desc }) => (
