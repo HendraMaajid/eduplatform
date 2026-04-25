@@ -15,10 +15,10 @@ type Course struct {
 	ShortDescription string         `gorm:"size:500" json:"shortDescription"`
 	Thumbnail        string         `gorm:"size:500" json:"thumbnail"`
 	Price            int            `gorm:"default:0" json:"price"`
-	Category         string         `gorm:"size:100" json:"category"`
+	Category         string         `gorm:"size:100;index" json:"category"`
 	Level            string         `gorm:"size:20;default:beginner" json:"level"`
-	Status           string         `gorm:"size:20;default:draft" json:"status"`
-	TeacherID        uuid.UUID      `gorm:"type:uuid" json:"teacherId"`
+	Status           string         `gorm:"size:20;default:draft;index" json:"status"`
+	TeacherID        uuid.UUID      `gorm:"type:uuid;index" json:"teacherId"`
 	Teacher          *User          `gorm:"foreignKey:TeacherID" json:"teacher,omitempty"`
 	Duration         string         `gorm:"size:50" json:"duration"`
 	Rating           float64        `gorm:"type:decimal(3,2);default:0" json:"rating"`

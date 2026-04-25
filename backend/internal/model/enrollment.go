@@ -9,15 +9,15 @@ import (
 
 type Enrollment struct {
 	ID               uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	CourseID         uuid.UUID      `gorm:"type:uuid;not null;index" json:"courseId"`
+	CourseID         uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_enrollment_student_course,unique" json:"courseId"`
 	Course           *Course        `gorm:"foreignKey:CourseID" json:"course,omitempty"`
-	StudentID        uuid.UUID      `gorm:"type:uuid;not null;index" json:"studentId"`
+	StudentID        uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_enrollment_student_course,unique" json:"studentId"`
 	Student          *User          `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 	PaymentAmount    int            `gorm:"default:0" json:"paymentAmount"`
 	Progress         int            `gorm:"default:0" json:"progress"`
 	CompletedModules StringArray    `gorm:"type:jsonb" json:"completedModules"`
-	Status           string         `gorm:"size:20;default:active" json:"status"`
-	EnrolledAt       time.Time      `json:"enrolledAt"`
+	Status           string         `gorm:"size:20;default:active;index" json:"status"`
+	EnrolledAt       time.Time      `gorm:"index" json:"enrolledAt"`
 	UpdatedAt        time.Time      `json:"-"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
@@ -43,11 +43,11 @@ type Certificate struct {
 
 type Notification struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"userId"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index:idx_notification_user_read" json:"userId"`
 	Title     string    `gorm:"size:255;not null" json:"title"`
 	Message   string    `gorm:"type:text;not null" json:"message"`
 	Type      string    `gorm:"size:20;default:info" json:"type"`
-	IsRead    bool      `gorm:"default:false" json:"isRead"`
+	IsRead    bool      `gorm:"default:false;index:idx_notification_user_read" json:"isRead"`
 	Link      string    `gorm:"size:500" json:"link,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }

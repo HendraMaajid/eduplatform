@@ -68,9 +68,9 @@ type Question struct {
 
 type QuizAttempt struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	QuizID      uuid.UUID `gorm:"type:uuid;not null;index" json:"quizId"`
+	QuizID      uuid.UUID `gorm:"type:uuid;not null;index;index:idx_attempt_student_quiz" json:"quizId"`
 	Quiz        *Quiz     `gorm:"foreignKey:QuizID" json:"quiz,omitempty"`
-	StudentID   uuid.UUID `gorm:"type:uuid;not null;index" json:"studentId"`
+	StudentID   uuid.UUID `gorm:"type:uuid;not null;index;index:idx_attempt_student_quiz" json:"studentId"`
 	Student     *User     `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 	Score       int       `gorm:"default:0" json:"score"`
 	TotalPoints int       `gorm:"default:0" json:"totalPoints"`

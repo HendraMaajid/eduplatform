@@ -14,7 +14,7 @@ type Assignment struct {
 	Title            string         `gorm:"size:255;not null" json:"title"`
 	Description      string         `gorm:"type:text" json:"description"`
 	Instructions     string         `gorm:"type:text" json:"instructions"`
-	Deadline         time.Time      `json:"deadline"`
+	Deadline         time.Time      `gorm:"index" json:"deadline"`
 	MaxScore         int            `gorm:"default:100" json:"maxScore"`
 	IsPublished      bool           `gorm:"default:false" json:"isPublished"`
 	CreatedAt        time.Time      `json:"createdAt"`
@@ -26,9 +26,9 @@ type Assignment struct {
 
 type Submission struct {
 	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	AssignmentID uuid.UUID      `gorm:"type:uuid;not null;index" json:"assignmentId"`
+	AssignmentID uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_submission_student_assignment" json:"assignmentId"`
 	Assignment   *Assignment    `gorm:"foreignKey:AssignmentID" json:"assignment,omitempty"`
-	StudentID    uuid.UUID      `gorm:"type:uuid;not null;index" json:"studentId"`
+	StudentID    uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_submission_student_assignment" json:"studentId"`
 	Student      *User          `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 	FileURL      string         `gorm:"size:500" json:"fileUrl"`
 	FileName     string         `gorm:"size:255" json:"fileName"`

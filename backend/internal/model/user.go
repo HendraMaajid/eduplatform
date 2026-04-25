@@ -13,10 +13,10 @@ type User struct {
 	Email        string         `gorm:"size:255;uniqueIndex;not null" json:"email"`
 	PasswordHash string         `gorm:"size:255" json:"-"`
 	Avatar       string         `gorm:"size:500" json:"avatar"`
-	Role         string         `gorm:"size:20;default:student" json:"role"`
+	Role         string         `gorm:"size:20;default:student;index" json:"role"`
 	Bio          string         `gorm:"type:text" json:"bio,omitempty"`
 	Phone        string         `gorm:"size:20" json:"phone,omitempty"`
-	GoogleID     string         `gorm:"size:255" json:"-"`
+	GoogleID     string         `gorm:"size:255;index" json:"-"`
 	CreatedAt    time.Time      `json:"createdAt"`
 	UpdatedAt    time.Time      `json:"-"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`

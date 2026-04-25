@@ -68,6 +68,11 @@ func EnrollCourse(studentID string, courseID string, req dto.EnrollCourseRequest
 		CreateNotification(course.TeacherID.String(), "Pendaftaran Baru", fmt.Sprintf("%s mendaftar di %s", student.Name, course.Title), "info", "/dashboard/teacher/courses")
 	}
 
+	// Invalidate related caches
+	AppCache.InvalidatePrefix("enrollments:")
+	AppCache.InvalidatePrefix("dashboard:")
+	AppCache.InvalidatePrefix("courses:")
+
 	return &enrollment, nil
 }
 
@@ -78,9 +83,20 @@ func GetMyEnrollments(studentID string) ([]model.Enrollment, error) {
 }
 
 func GetRecentEnrollments(limit int) ([]model.Enrollment, error) {
+	// Check cache
+	cacheKey := fmt.Sprintf("enrollments:recent:%d", limit)
+	if cached, ok := AppCache.Get(cacheKey); ok {
+		return cached.([]model.Enrollment), nil
+	}
+
 	var enrollments []model.Enrollment
 	err := database.DB.Preload("Student").Preload("Course").
 		Order("enrolled_at desc").Limit(limit).Find(&enrollments).Error
+	if err != nil {
+		return nil, err
+	}
+
+	AppCache.Set(cacheKey, enrollments)
 	return enrollments, err
 }
 
@@ -95,44 +111,39 @@ func GetCourseEnrollments(courseID string) ([]model.Enrollment, error) {
 // - Quizzes attempted (25% weight)
 // - Assignments submitted & graded >= 80 (25% weight)
 func recalculateProgress(studentID string, courseID string, enrollment *model.Enrollment) {
+	// Single query to get all counts needed for progress calculation (1 round-trip instead of 5)
+	var counts struct {
+		TotalModules      int64
+		TotalQuizzes      int64
+		CompletedQuizzes  int64
+		TotalAssignments  int64
+		GradedAssignments int64
+	}
+	database.DB.Raw(`
+		SELECT
+			(SELECT count(*) FROM modules WHERE course_id = ? AND deleted_at IS NULL) as total_modules,
+			(SELECT count(*) FROM quizzes WHERE course_id = ? AND deleted_at IS NULL) as total_quizzes,
+			(SELECT count(DISTINCT qa.quiz_id) FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id WHERE q.course_id = ? AND qa.student_id = ? AND q.deleted_at IS NULL) as completed_quizzes,
+			(SELECT count(*) FROM assignments WHERE course_id = ? AND deleted_at IS NULL) as total_assignments,
+			(SELECT count(*) FROM submissions s JOIN assignments a ON a.id = s.assignment_id WHERE a.course_id = ? AND s.student_id = ? AND s.score >= 80 AND s.deleted_at IS NULL AND a.deleted_at IS NULL) as graded_assignments
+	`, courseID, courseID, courseID, studentID, courseID, courseID, studentID).Scan(&counts)
+
 	// Modules: 50%
-	var totalModules int64
-	database.DB.Model(&model.Module{}).Where("course_id = ?", courseID).Count(&totalModules)
-	moduleProgress := 0.0
-	if totalModules > 0 {
-		moduleProgress = float64(len(enrollment.CompletedModules)) / float64(totalModules)
-	} else {
-		moduleProgress = 1.0 // No modules = module part is complete
+	moduleProgress := 1.0
+	if counts.TotalModules > 0 {
+		moduleProgress = float64(len(enrollment.CompletedModules)) / float64(counts.TotalModules)
 	}
 
 	// Quizzes: 25%
-	var totalQuizzes int64
-	database.DB.Model(&model.Quiz{}).Where("course_id = ?", courseID).Count(&totalQuizzes)
-	quizProgress := 0.0
-	if totalQuizzes > 0 {
-		var completedQuizzes int64
-		database.DB.Model(&model.QuizAttempt{}).
-			Joins("JOIN quizzes ON quizzes.id = quiz_attempts.quiz_id").
-			Where("quizzes.course_id = ? AND quiz_attempts.student_id = ?", courseID, studentID).
-			Count(&completedQuizzes)
-		quizProgress = float64(completedQuizzes) / float64(totalQuizzes)
-	} else {
-		quizProgress = 1.0 // No quizzes = quiz part is complete
+	quizProgress := 1.0
+	if counts.TotalQuizzes > 0 {
+		quizProgress = float64(counts.CompletedQuizzes) / float64(counts.TotalQuizzes)
 	}
 
 	// Assignments: 25%
-	var totalAssignments int64
-	database.DB.Model(&model.Assignment{}).Where("course_id = ?", courseID).Count(&totalAssignments)
-	assignmentProgress := 0.0
-	if totalAssignments > 0 {
-		var gradedAssignments int64
-		database.DB.Model(&model.Submission{}).
-			Joins("JOIN assignments ON assignments.id = submissions.assignment_id").
-			Where("assignments.course_id = ? AND submissions.student_id = ? AND submissions.score >= 80", courseID, studentID).
-			Count(&gradedAssignments)
-		assignmentProgress = float64(gradedAssignments) / float64(totalAssignments)
-	} else {
-		assignmentProgress = 1.0 // No assignments = assignment part is complete
+	assignmentProgress := 1.0
+	if counts.TotalAssignments > 0 {
+		assignmentProgress = float64(counts.GradedAssignments) / float64(counts.TotalAssignments)
 	}
 
 	// Weighted total
@@ -291,31 +302,53 @@ func GenerateCertificate(studentID string, courseID string) (*model.Certificate,
 	}
 
 	// ===== VALIDATION: All quizzes must be attempted =====
-	var quizzes []model.Quiz
-	database.DB.Where("course_id = ?", parsedCourseID).Find(&quizzes)
+	// Batch query: find quizzes that student has NOT attempted (1 query instead of N)
+	var unattemptedQuizzes []model.Quiz
+	database.DB.Raw(`
+		SELECT q.* FROM quizzes q
+		WHERE q.course_id = ? AND q.deleted_at IS NULL
+		AND q.id NOT IN (
+			SELECT DISTINCT qa.quiz_id FROM quiz_attempts qa WHERE qa.student_id = ?
+		)
+	`, parsedCourseID, parsedStudentID).Scan(&unattemptedQuizzes)
 
-	for _, quiz := range quizzes {
-		var attemptCount int64
-		database.DB.Model(&model.QuizAttempt{}).Where("quiz_id = ? AND student_id = ?", quiz.ID, parsedStudentID).Count(&attemptCount)
-		if attemptCount == 0 {
-			return nil, fmt.Errorf("anda belum mengerjakan kuis: %s", quiz.Title)
-		}
+	if len(unattemptedQuizzes) > 0 {
+		return nil, fmt.Errorf("anda belum mengerjakan kuis: %s", unattemptedQuizzes[0].Title)
 	}
 
 	// ===== VALIDATION: All assignments must be submitted AND graded >= 80 =====
+	// Batch query: get all assignments with their submissions for this student (2 queries instead of N+1)
 	var assignments []model.Assignment
 	database.DB.Where("course_id = ?", parsedCourseID).Find(&assignments)
 
-	for _, assignment := range assignments {
-		var submission model.Submission
-		if err := database.DB.Where("assignment_id = ? AND student_id = ?", assignment.ID, parsedStudentID).First(&submission).Error; err != nil {
-			return nil, fmt.Errorf("anda belum mengumpulkan tugas: %s", assignment.Title)
+	if len(assignments) > 0 {
+		// Batch fetch all submissions for this student in this course's assignments
+		assignmentIDs := make([]uuid.UUID, len(assignments))
+		for i, a := range assignments {
+			assignmentIDs[i] = a.ID
 		}
-		if submission.Status == "submitted" {
-			return nil, fmt.Errorf("tugas '%s' belum dinilai oleh pengajar", assignment.Title)
+
+		var submissions []model.Submission
+		database.DB.Where("assignment_id IN ? AND student_id = ?", assignmentIDs, parsedStudentID).Find(&submissions)
+
+		// Build lookup map
+		submissionMap := make(map[uuid.UUID]*model.Submission, len(submissions))
+		for i := range submissions {
+			submissionMap[submissions[i].AssignmentID] = &submissions[i]
 		}
-		if submission.Score < 80 {
-			return nil, fmt.Errorf("nilai tugas '%s' belum mencukupi (%d/100, minimum 80)", assignment.Title, submission.Score)
+
+		// Validate each assignment
+		for _, assignment := range assignments {
+			sub, exists := submissionMap[assignment.ID]
+			if !exists {
+				return nil, fmt.Errorf("anda belum mengumpulkan tugas: %s", assignment.Title)
+			}
+			if sub.Status == "submitted" {
+				return nil, fmt.Errorf("tugas '%s' belum dinilai oleh pengajar", assignment.Title)
+			}
+			if sub.Score < 80 {
+				return nil, fmt.Errorf("nilai tugas '%s' belum mencukupi (%d/100, minimum 80)", assignment.Title, sub.Score)
+			}
 		}
 	}
 

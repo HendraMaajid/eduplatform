@@ -1,15 +1,29 @@
 package service
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"backend/internal/dto"
 	"backend/internal/model"
+	"backend/pkg/cache"
 	"backend/pkg/database"
 )
 
+// AppCache is a shared in-memory cache for read-heavy endpoints.
+// TTL of 10 seconds — data is fresh enough for dashboard use but
+// eliminates redundant DB calls from rapid page loads / React StrictMode.
+var AppCache = cache.New(10 * time.Second)
+
 func GetAllCourses(teacherID string) ([]model.Course, error) {
+	// Check cache first
+	cacheKey := fmt.Sprintf("courses:all:%s", teacherID)
+	if cached, ok := AppCache.Get(cacheKey); ok {
+		return cached.([]model.Course), nil
+	}
+
 	var courses []model.Course
 
 	// Single query with subquery counts (2 round-trips instead of 5: this query + teacher preload)
@@ -26,10 +40,22 @@ func GetAllCourses(teacherID string) ([]model.Course, error) {
 	}
 
 	err := query.Find(&courses).Error
-	return courses, err
+	if err != nil {
+		return nil, err
+	}
+
+	AppCache.Set(cacheKey, courses)
+	return courses, nil
 }
 
 func GetCourseByID(id string) (*model.Course, error) {
+	// Check cache
+	cacheKey := fmt.Sprintf("courses:id:%s", id)
+	if cached, ok := AppCache.Get(cacheKey); ok {
+		course := cached.(model.Course)
+		return &course, nil
+	}
+
 	var course model.Course
 	err := database.DB.Preload("Teacher").Where("id = ?", id).First(&course).Error
 	if err != nil {
@@ -41,6 +67,7 @@ func GetCourseByID(id string) (*model.Course, error) {
 	database.DB.Model(&model.Module{}).Where("course_id = ?", course.ID).Count(&modulesCount)
 	course.TotalModules = int(modulesCount)
 
+	AppCache.Set(cacheKey, course)
 	return &course, nil
 }
 
@@ -74,6 +101,8 @@ func CreateCourse(req dto.CreateCourseRequest, contextTeacherID string) (*model.
 		return nil, err
 	}
 
+	// Invalidate courses cache
+	AppCache.InvalidatePrefix("courses:")
 	return &course, nil
 }
 
@@ -119,6 +148,8 @@ func UpdateCourse(id string, req dto.CreateCourseRequest) (*model.Course, error)
 		return nil, err
 	}
 
+	// Invalidate courses cache
+	AppCache.InvalidatePrefix("courses:")
 	return &course, nil
 }
 
@@ -128,7 +159,11 @@ func DeleteCourse(id string) error {
 		return err
 	}
 
-	return database.DB.Delete(&course).Error
+	err := database.DB.Delete(&course).Error
+	if err == nil {
+		AppCache.InvalidatePrefix("courses:")
+	}
+	return err
 }
 
 // Modules Service Methods
@@ -158,6 +193,7 @@ func CreateModule(courseID string, req dto.CreateModuleRequest) (*model.Module, 
 		return nil, err
 	}
 
+	AppCache.InvalidatePrefix("courses:")
 	return &module, nil
 }
 
@@ -191,6 +227,7 @@ func UpdateModule(id string, req dto.UpdateModuleRequest) (*model.Module, error)
 		return nil, err
 	}
 
+	AppCache.InvalidatePrefix("courses:")
 	return &module, nil
 }
 
@@ -200,5 +237,9 @@ func DeleteModule(id string) error {
 		return err
 	}
 
-	return database.DB.Delete(&module).Error
+	err := database.DB.Delete(&module).Error
+	if err == nil {
+		AppCache.InvalidatePrefix("courses:")
+	}
+	return err
 }

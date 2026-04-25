@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -37,6 +38,12 @@ type StudentDashboardStats struct {
 }
 
 func GetAdminStats() (*AdminDashboardStats, error) {
+	// Check cache
+	if cached, ok := AppCache.Get("dashboard:admin"); ok {
+		stats := cached.(AdminDashboardStats)
+		return &stats, nil
+	}
+
 	var stats AdminDashboardStats
 
 	// Single query to get all counts (1 round-trip instead of 4)
@@ -48,10 +55,18 @@ func GetAdminStats() (*AdminDashboardStats, error) {
 			(SELECT COALESCE(sum(amount), 0) FROM payments) as total_revenue
 	`).Scan(&stats)
 
+	AppCache.Set("dashboard:admin", stats)
 	return &stats, nil
 }
 
 func GetTeacherStats(teacherID string) (*TeacherDashboardStats, error) {
+	// Check cache
+	cacheKey := fmt.Sprintf("dashboard:teacher:%s", teacherID)
+	if cached, ok := AppCache.Get(cacheKey); ok {
+		stats := cached.(TeacherDashboardStats)
+		return &stats, nil
+	}
+
 	var stats TeacherDashboardStats
 
 	// Single query for all teacher stats (1 round-trip instead of 3)
@@ -62,15 +77,20 @@ func GetTeacherStats(teacherID string) (*TeacherDashboardStats, error) {
 			(SELECT count(*) FROM submissions s JOIN assignments a ON a.id = s.assignment_id JOIN courses c ON c.id = a.course_id WHERE c.teacher_id = ? AND s.status = 'submitted' AND s.deleted_at IS NULL AND a.deleted_at IS NULL AND c.deleted_at IS NULL) as pending_submissions
 	`, teacherID, teacherID, teacherID).Scan(&stats)
 
+	AppCache.Set(cacheKey, stats)
 	return &stats, nil
 }
 
 func GetStudentStats(studentID string) (*StudentDashboardStats, error) {
 	var stats StudentDashboardStats
 
-	database.DB.Model(&model.Enrollment{}).Where("student_id = ?", studentID).Count(&stats.EnrolledCourses)
-	database.DB.Model(&model.Enrollment{}).Where("student_id = ? AND status = ?", studentID, "completed").Count(&stats.CompletedCourses)
-	database.DB.Model(&model.Certificate{}).Where("student_id = ?", studentID).Count(&stats.Certificates)
+	// Single query for all student counts (1 round-trip instead of 3)
+	database.DB.Raw(`
+		SELECT 
+			(SELECT count(*) FROM enrollments WHERE student_id = ? AND deleted_at IS NULL) as enrolled_courses,
+			(SELECT count(*) FROM enrollments WHERE student_id = ? AND status = 'completed' AND deleted_at IS NULL) as completed_courses,
+			(SELECT count(*) FROM certificates WHERE student_id = ?) as certificates
+	`, studentID, studentID, studentID).Scan(&stats)
 
 	var deadlines []model.Assignment
 	database.DB.

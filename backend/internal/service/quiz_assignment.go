@@ -147,16 +147,19 @@ func SubmitQuiz(studentID string, quizID string, req dto.SubmitQuizRequest) (*mo
 	}
 	attempt.Passed = percentage >= quiz.PassingScore
 
-	// Save everything
+	// Save everything in a single transaction
 	tx := database.DB.Begin()
 	if err := tx.Create(&attempt).Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
+	// Batch insert all answers in 1 query instead of N queries
 	for i := range answers {
 		answers[i].AttemptID = attempt.ID
-		if err := tx.Create(&answers[i]).Error; err != nil {
+	}
+	if len(answers) > 0 {
+		if err := tx.CreateInBatches(answers, len(answers)).Error; err != nil {
 			tx.Rollback()
 			return nil, err
 		}
