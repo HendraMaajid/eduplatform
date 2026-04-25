@@ -20,18 +20,60 @@ func GetAllCourses(teacherID string) ([]model.Course, error) {
 		return nil, err
 	}
 
-	for i := range courses {
-		var modulesCount int64
-		database.DB.Model(&model.Module{}).Where("course_id = ?", courses[i].ID).Count(&modulesCount)
-		courses[i].TotalModules = int(modulesCount)
+	if len(courses) == 0 {
+		return courses, nil
+	}
 
-		var quizzesCount int64
-		database.DB.Model(&model.Quiz{}).Where("course_id = ?", courses[i].ID).Count(&quizzesCount)
-		courses[i].TotalQuizzes = int(quizzesCount)
+	// Collect all course IDs for batch queries (avoids N+1)
+	courseIDs := make([]uuid.UUID, len(courses))
+	courseMap := make(map[uuid.UUID]int, len(courses))
+	for i, c := range courses {
+		courseIDs[i] = c.ID
+		courseMap[c.ID] = i
+	}
 
-		var studentsCount int64
-		database.DB.Model(&model.Enrollment{}).Where("course_id = ?", courses[i].ID).Count(&studentsCount)
-		courses[i].EnrolledStudents = int(studentsCount)
+	// Batch count modules
+	type CountResult struct {
+		CourseID uuid.UUID
+		Count    int
+	}
+
+	var moduleCounts []CountResult
+	database.DB.Model(&model.Module{}).
+		Select("course_id, count(*) as count").
+		Where("course_id IN ?", courseIDs).
+		Group("course_id").
+		Scan(&moduleCounts)
+	for _, mc := range moduleCounts {
+		if idx, ok := courseMap[mc.CourseID]; ok {
+			courses[idx].TotalModules = mc.Count
+		}
+	}
+
+	// Batch count quizzes
+	var quizCounts []CountResult
+	database.DB.Model(&model.Quiz{}).
+		Select("course_id, count(*) as count").
+		Where("course_id IN ?", courseIDs).
+		Group("course_id").
+		Scan(&quizCounts)
+	for _, qc := range quizCounts {
+		if idx, ok := courseMap[qc.CourseID]; ok {
+			courses[idx].TotalQuizzes = qc.Count
+		}
+	}
+
+	// Batch count enrolled students
+	var enrollCounts []CountResult
+	database.DB.Model(&model.Enrollment{}).
+		Select("course_id, count(*) as count").
+		Where("course_id IN ?", courseIDs).
+		Group("course_id").
+		Scan(&enrollCounts)
+	for _, ec := range enrollCounts {
+		if idx, ok := courseMap[ec.CourseID]; ok {
+			courses[idx].EnrolledStudents = ec.Count
+		}
 	}
 
 	return courses, nil

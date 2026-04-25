@@ -20,12 +20,23 @@ func main() {
 		log.Println("No .env file found, relying on environment variables")
 	}
 
+	// Set Gin to release mode in production (less logging, faster)
+	if os.Getenv("GIN_MODE") == "" {
+		// Default to release mode when deployed (no GIN_MODE set means production)
+		// In development, set GIN_MODE=debug in .env
+		if os.Getenv("RAILWAY_ENVIRONMENT") != "" || os.Getenv("RENDER") != "" {
+			gin.SetMode(gin.ReleaseMode)
+		}
+	}
+
 	// Initialize Database
 	database.InitDB()
 
-	// Seed dummy data
-	seed.SeedAll()
-	seed.SeedAdminIfMissing()
+	// Seed dummy data (skips if data already exists)
+	if os.Getenv("SKIP_SEED") != "true" {
+		seed.SeedAll()
+		seed.SeedAdminIfMissing()
+	}
 
 	// Initialize Gin router
 	r := gin.Default()
