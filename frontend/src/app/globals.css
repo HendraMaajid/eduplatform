@@ -1,0 +1,314 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ============================================
+   Indigo/Violet Theme - Light Mode
+   ============================================ */
+:root {
+  --background: oklch(0.985 0.002 280);
+  --foreground: oklch(0.16 0.025 280);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.025 280);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0.025 280);
+  --primary: oklch(0.488 0.243 264.376);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.96 0.015 280);
+  --secondary-foreground: oklch(0.24 0.04 280);
+  --muted: oklch(0.96 0.01 280);
+  --muted-foreground: oklch(0.5 0.02 280);
+  --accent: oklch(0.94 0.03 280);
+  --accent-foreground: oklch(0.24 0.04 280);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.91 0.015 280);
+  --input: oklch(0.91 0.015 280);
+  --ring: oklch(0.488 0.243 264.376);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.541 0.281 293.009);
+  --chart-3: oklch(0.606 0.25 292);
+  --chart-4: oklch(0.702 0.183 293);
+  --chart-5: oklch(0.795 0.124 286);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.97 0.01 280);
+  --sidebar-foreground: oklch(0.16 0.025 280);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.94 0.03 280);
+  --sidebar-accent-foreground: oklch(0.24 0.04 280);
+  --sidebar-border: oklch(0.91 0.015 280);
+  --sidebar-ring: oklch(0.488 0.243 264.376);
+}
+
+/* ============================================
+   Indigo/Violet Theme - Dark Mode
+   ============================================ */
+.dark {
+  --background: oklch(0.13 0.02 280);
+  --foreground: oklch(0.95 0.01 280);
+  --card: oklch(0.18 0.025 280);
+  --card-foreground: oklch(0.95 0.01 280);
+  --popover: oklch(0.18 0.025 280);
+  --popover-foreground: oklch(0.95 0.01 280);
+  --primary: oklch(0.585 0.233 277);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.22 0.03 280);
+  --secondary-foreground: oklch(0.92 0.01 280);
+  --muted: oklch(0.22 0.025 280);
+  --muted-foreground: oklch(0.65 0.03 280);
+  --accent: oklch(0.25 0.04 280);
+  --accent-foreground: oklch(0.92 0.01 280);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.28 0.03 280);
+  --input: oklch(0.25 0.03 280);
+  --ring: oklch(0.585 0.233 277);
+  --chart-1: oklch(0.585 0.233 277);
+  --chart-2: oklch(0.641 0.281 293.009);
+  --chart-3: oklch(0.706 0.25 292);
+  --chart-4: oklch(0.76 0.183 293);
+  --chart-5: oklch(0.82 0.124 286);
+  --sidebar: oklch(0.16 0.025 280);
+  --sidebar-foreground: oklch(0.95 0.01 280);
+  --sidebar-primary: oklch(0.585 0.233 277);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.22 0.035 280);
+  --sidebar-accent-foreground: oklch(0.92 0.01 280);
+  --sidebar-border: oklch(0.28 0.03 280);
+  --sidebar-ring: oklch(0.585 0.233 277);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans scroll-smooth;
+  }
+}
+
+/* ============================================
+   Custom Utility Classes
+   ============================================ */
+@layer utilities {
+  .gradient-primary {
+    background: linear-gradient(135deg, oklch(0.488 0.243 264.376), oklch(0.541 0.281 293.009));
+  }
+  .gradient-primary-dark {
+    background: linear-gradient(135deg, oklch(0.585 0.233 277), oklch(0.641 0.281 293.009));
+  }
+  .gradient-text {
+    background: linear-gradient(135deg, oklch(0.488 0.243 264.376), oklch(0.541 0.281 293.009));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .glass {
+    background: oklch(1 0 0 / 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid oklch(1 0 0 / 0.2);
+  }
+  .dark .glass {
+    background: oklch(0.18 0.025 280 / 0.7);
+    border: 1px solid oklch(1 0 0 / 0.1);
+  }
+  .glass-card {
+    background: oklch(1 0 0 / 0.5);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid oklch(1 0 0 / 0.3);
+    box-shadow: 0 8px 32px oklch(0 0 0 / 0.08);
+  }
+  .dark .glass-card {
+    background: oklch(0.18 0.025 280 / 0.5);
+    border: 1px solid oklch(1 0 0 / 0.08);
+    box-shadow: 0 8px 32px oklch(0 0 0 / 0.3);
+  }
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@layer utilities {
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background-size: 200% 100%;
+  }
+  .animate-fade-up {
+    animation: fade-up 0.5s ease-out forwards;
+  }
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out forwards;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0.02 280);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0.03 280);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.35 0.03 280);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.45 0.04 280);
+}
+/* ============================================
+   React Quill Editor - Light & Dark Mode
+   ============================================ */
+
+/* Base: remove default borders, use theme border */
+.ql-toolbar.ql-snow {
+  border: 1px solid hsl(var(--border));
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+.ql-container.ql-snow {
+  border: 1px solid hsl(var(--border));
+  border-top: none;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.ql-editor {
+  min-height: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ql-editor.ql-blank::before {
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
+}
+
+/* Dark mode specifics */
+.dark .ql-toolbar.ql-snow {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+.dark .ql-container.ql-snow {
+  background-color: transparent;
+}
+
+.dark .ql-snow .ql-stroke {
+  stroke: hsl(var(--foreground));
+}
+
+.dark .ql-snow .ql-fill,
+.dark .ql-snow .ql-stroke.ql-fill {
+  fill: hsl(var(--foreground));
+}
+
+.dark .ql-snow .ql-picker {
+  color: hsl(var(--foreground));
+}
+
+.dark .ql-snow .ql-picker-options {
+  background-color: hsl(var(--popover));
+  border-color: hsl(var(--border));
+}
+
+.dark .ql-snow .ql-picker-label:hover,
+.dark .ql-snow .ql-picker-label.ql-active,
+.dark .ql-snow .ql-picker-item:hover,
+.dark .ql-snow .ql-picker-item.ql-selected {
+  color: hsl(var(--primary));
+}
+
+.dark .ql-snow button:hover .ql-stroke,
+.dark .ql-snow .ql-picker-label:hover .ql-stroke {
+  stroke: hsl(var(--primary));
+}
+
+.dark .ql-snow button:hover .ql-fill,
+.dark .ql-snow .ql-picker-label:hover .ql-fill {
+  fill: hsl(var(--primary));
+}
