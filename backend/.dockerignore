@@ -1,0 +1,25 @@
+# Docker
+.dockerignore
+
+# Git
+.git
+.gitignore
+
+# Environment (secrets set via Railway dashboard)
+.env
+
+# Compiled binary (we rebuild in Docker)
+main
+server
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent files
+AGENTS.md
+CLAUDE.md
