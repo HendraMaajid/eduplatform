@@ -368,10 +368,11 @@ export default function QuizQuestionsPage() {
               <div className="space-y-2">
                 <Label>Tipe Soal</Label>
                 <Select value={form.type} onValueChange={(val) => {
-                  const newForm = { ...form, type: val, correctAnswer: "" };
-                  if (val === "true_false") {
+                  const newType = val ?? "multiple_choice";
+                  const newForm = { ...form, type: newType, correctAnswer: "" };
+                  if (newType === "true_false") {
                     newForm.options = ["Benar", "Salah"];
-                  } else if (val === "multiple_choice" && form.options.length < 2) {
+                  } else if (newType === "multiple_choice" && form.options.length < 2) {
                     newForm.options = ["", "", "", ""];
                   }
                   setForm(newForm);

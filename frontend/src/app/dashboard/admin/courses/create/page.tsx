@@ -198,7 +198,7 @@ export default function CreateCoursePage() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Kategori *</Label>
-                <Select required value={formData.category} onValueChange={(v) => setFormData({...formData, category: v})}>
+                <Select required value={formData.category} onValueChange={(v) => setFormData({...formData, category: v ?? ""})}>
                   <SelectTrigger>
                     <span className={!formData.category ? "text-muted-foreground" : ""}>
                       {formData.category === "mobile" ? "Mobile Development" :
@@ -219,7 +219,7 @@ export default function CreateCoursePage() {
               </div>
               <div className="space-y-2">
                 <Label>Level *</Label>
-                <Select required value={formData.level} onValueChange={(v) => setFormData({...formData, level: v})}>
+                <Select required value={formData.level} onValueChange={(v) => setFormData({...formData, level: v ?? ""})}>
                   <SelectTrigger>
                     <span className={!formData.level ? "text-muted-foreground" : ""}>
                       {formData.level === "beginner" ? "Pemula" :
@@ -240,7 +240,7 @@ export default function CreateCoursePage() {
               </div>
               <div className="space-y-2">
                 <Label>Status *</Label>
-                <Select required value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}>
+                <Select required value={formData.status} onValueChange={(v) => setFormData({...formData, status: v ?? "draft"})}>
                   <SelectTrigger>
                     <span className={!formData.status ? "text-muted-foreground" : ""}>
                       {formData.status === "draft" ? "Draft" :
@@ -264,7 +264,7 @@ export default function CreateCoursePage() {
           <CardContent>
             <div className="space-y-2">
               <Label>Pengajar *</Label>
-              <Select required value={formData.teacherId} onValueChange={(v) => setFormData({...formData, teacherId: v})}>
+              <Select required value={formData.teacherId} onValueChange={(v) => setFormData({...formData, teacherId: v ?? ""})}>
                 <SelectTrigger>
                   <span className={!formData.teacherId ? "text-muted-foreground" : ""}>
                     {formData.teacherId 

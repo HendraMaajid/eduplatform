@@ -272,7 +272,7 @@ export default function AdminUsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={createForm.role} onValueChange={(v) => setCreateForm({...createForm, role: v})}>
+              <Select value={createForm.role} onValueChange={(v) => setCreateForm({...createForm, role: v ?? "student"})}>
                 <SelectTrigger>
                   <span>{roleConfig[createForm.role]?.label || "Pilih Role"}</span>
                 </SelectTrigger>
@@ -313,7 +313,7 @@ export default function AdminUsersPage() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={editForm.role} onValueChange={(v) => setEditForm({...editForm, role: v})}>
+              <Select value={editForm.role} onValueChange={(v) => setEditForm({...editForm, role: v ?? "student"})}>
                 <SelectTrigger>
                   <span>{roleConfig[editForm.role]?.label || "Pilih Role"}</span>
                 </SelectTrigger>

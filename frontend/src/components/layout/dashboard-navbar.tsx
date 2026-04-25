@@ -87,7 +87,7 @@ export function DashboardNavbar() {
   const handleNotificationClick = async (notif: any) => {
     if (!notif.isRead) {
       try {
-        await api.put(`/notifications/${notif.id}/read`);
+        await api.put(`/notifications/${notif.id}/read`, {});
         setNotifications((prev) => 
           prev.map((n) => n.id === notif.id ? { ...n, isRead: true } : n)
         );
@@ -103,7 +103,7 @@ export function DashboardNavbar() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await api.put("/notifications/read-all");
+      await api.put("/notifications/read-all", {});
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (error) {
       console.error("Failed to mark all as read", error);

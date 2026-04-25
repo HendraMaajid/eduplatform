@@ -114,7 +114,7 @@ export default function TeacherGradingPage() {
         </TabsList>
 
         <TabsContent value="pending" className="space-y-6 mt-4">
-          {Object.keys(pendingByCourse).length > 0 ? Object.entries(pendingByCourse).map(([courseName, subs]) => (
+          {Object.keys(pendingByCourse).length > 0 ? (Object.entries(pendingByCourse) as [string, any[]][]).map(([courseName, subs]) => (
             <div key={courseName} className="space-y-4">
               <h2 className="text-lg font-semibold border-b pb-2 flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" /> {courseName}
@@ -163,7 +163,7 @@ export default function TeacherGradingPage() {
         </TabsContent>
 
         <TabsContent value="graded" className="space-y-6 mt-4">
-          {Object.keys(gradedByCourse).length > 0 ? Object.entries(gradedByCourse).map(([courseName, subs]) => (
+          {Object.keys(gradedByCourse).length > 0 ? (Object.entries(gradedByCourse) as [string, any[]][]).map(([courseName, subs]) => (
             <div key={courseName} className="space-y-4">
               <h2 className="text-lg font-semibold border-b pb-2 flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" /> {courseName}
