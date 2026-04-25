@@ -83,17 +83,22 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
+        <div className="container mx-auto relative flex h-16 items-center justify-between px-4">
+          <Link href="/" className="flex items-center gap-2 z-10">
             <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
               <GraduationCap className="h-5 w-5 text-white" />
             </div>
             <span className="text-xl font-bold gradient-text">EduPlatform</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-6">
+            <button 
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} 
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Home
+            </button>
             <Link href="#courses" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Kursus
             </Link>
@@ -105,7 +110,7 @@ export default function LandingPage() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 z-10">
             <Button
               variant="ghost"
               size="icon"
