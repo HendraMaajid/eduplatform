@@ -92,17 +92,30 @@ export default function StudentCoursesPage() {
                     </div>
                     <Progress value={enrollment.progress || 0} className="h-2" />
                   </div>
-                  <Button size="sm" className="w-full gap-2" asChild>
-                    <Link href={`/dashboard/student/courses/${course.id}`}>
-                      {enrollment.status === "certified" ? (
-                        <><Trophy className="h-3 w-3" /> Lihat Sertifikat</>
-                      ) : enrollment.progress > 0 ? (
-                        <><Play className="h-3 w-3" /> Lanjutkan Belajar</>
-                      ) : (
-                        <><Play className="h-3 w-3" /> Mulai Belajar</>
-                      )}
-                    </Link>
-                  </Button>
+                  {enrollment.status === "certified" ? (
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <Button size="sm" variant="outline" className="w-full gap-1" asChild>
+                        <Link href={`/dashboard/student/courses/${course.id}`}>
+                          <Play className="h-3 w-3" /> Belajar Lagi
+                        </Link>
+                      </Button>
+                      <Button size="sm" className="w-full gap-1" asChild>
+                        <Link href="/dashboard/student/certificates">
+                          <Trophy className="h-3 w-3" /> Sertifikat
+                        </Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" className="w-full gap-2" asChild>
+                      <Link href={`/dashboard/student/courses/${course.id}`}>
+                        {enrollment.progress > 0 ? (
+                          <><Play className="h-3 w-3" /> Lanjutkan Belajar</>
+                        ) : (
+                          <><Play className="h-3 w-3" /> Mulai Belajar</>
+                        )}
+                      </Link>
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );

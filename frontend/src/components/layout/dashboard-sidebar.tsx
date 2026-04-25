@@ -129,65 +129,81 @@ export function DashboardSidebar() {
   }, [currentRole, pathname]);
 
   return (
-    <aside
-      className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300 flex flex-col",
-        sidebarOpen ? "w-64" : "w-[70px]"
+    <>
+      {/* Mobile Backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden" 
+          onClick={toggleSidebar}
+        />
       )}
-    >
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
-        {sidebarOpen && (
-          <Link href="/dashboard" className="flex items-center gap-2">
+      
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300 flex flex-col",
+          // On mobile: hidden unless open. On desktop: toggle between 64 and 70px width
+          sidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 lg:translate-x-0 lg:w-[70px]"
+        )}
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
+          {/* Always show full logo on mobile if sidebar is open, or if desktop and sidebar open */}
+          <Link href="/dashboard" className={cn("flex items-center gap-2", (!sidebarOpen && "lg:hidden") && "hidden")}>
             <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center">
               <GraduationCap className="h-5 w-5 text-white" />
             </div>
             <span className="font-bold text-lg gradient-text">EduPlatform</span>
           </Link>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-          className={cn("h-8 w-8 shrink-0", !sidebarOpen && "mx-auto")}
-        >
-          {sidebarOpen ? (
-            <ChevronLeft className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className={cn("h-8 w-8 shrink-0", !sidebarOpen && "hidden lg:flex lg:mx-auto")}
+          >
+            {sidebarOpen ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
 
-      {/* Navigation */}
-      <ScrollArea className="flex-1 py-4">
-        <nav className="space-y-1 px-3">
-          {items.map((baseItem) => {
-            const item = { ...baseItem };
-            if (item.href === "/dashboard/teacher/grading" && pendingGrading > 0) {
-              item.badge = pendingGrading;
-            }
-            const Icon = iconMap[item.icon] || LayoutDashboard;
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+        {/* Navigation */}
+        <ScrollArea className="flex-1 py-4">
+          <nav className="space-y-1 px-3">
+            {items.map((baseItem) => {
+              const item = { ...baseItem };
+              if (item.href === "/dashboard/teacher/grading" && pendingGrading > 0) {
+                item.badge = pendingGrading;
+              }
+              const Icon = iconMap[item.icon] || LayoutDashboard;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
-            const navLink = (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  !sidebarOpen && "justify-center px-2"
-                )}
-              >
-                <Icon className={cn("h-5 w-5 shrink-0", isActive && "drop-shadow-sm")} />
-                {sidebarOpen && (
-                  <>
-                    <span className="flex-1">{item.title}</span>
+              // We only use minimal mode (icon only) on desktop when sidebar is closed
+              const isMinimal = !sidebarOpen;
+
+              const navLink = (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    isMinimal && "lg:justify-center lg:px-2"
+                  )}
+                  onClick={() => {
+                    // Close sidebar on mobile after navigating
+                    if (window.innerWidth < 1024) toggleSidebar();
+                  }}
+                >
+                  <Icon className={cn("h-5 w-5 shrink-0", isActive && "drop-shadow-sm")} />
+                  <div className={cn("flex-1 flex items-center justify-between", isMinimal && "lg:hidden")}>
+                    <span>{item.title}</span>
                     {item.badge && (
                       <Badge
                         variant="secondary"
@@ -201,48 +217,47 @@ export function DashboardSidebar() {
                         {item.badge}
                       </Badge>
                     )}
-                  </>
-                )}
-              </Link>
-            );
-
-            if (!sidebarOpen) {
-              return (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger>{navLink}</TooltipTrigger>
-                  <TooltipContent side="right" className="flex items-center gap-2">
-                    {item.title}
-                    {item.badge && (
-                      <Badge variant="secondary" className="h-5 min-w-5 text-xs">
-                        {item.badge}
-                      </Badge>
-                    )}
-                  </TooltipContent>
-                </Tooltip>
+                  </div>
+                </Link>
               );
-            }
 
-            return navLink;
-          })}
-        </nav>
-      </ScrollArea>
+              if (isMinimal) {
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger className="w-full hidden lg:block">{navLink}</TooltipTrigger>
+                    <TooltipTrigger className="w-full lg:hidden">{navLink}</TooltipTrigger>
+                    <TooltipContent side="right" className="flex items-center gap-2">
+                      {item.title}
+                      {item.badge && (
+                        <Badge variant="secondary" className="h-5 min-w-5 text-xs">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
 
-      {/* User Info */}
-      <div className="border-t border-sidebar-border p-3">
-        <div
-          className={cn(
-            "flex items-center gap-3 rounded-lg p-2",
-            !sidebarOpen && "justify-center"
-          )}
-        >
-          <Avatar className="h-9 w-9 shrink-0 ring-2 ring-primary/20">
-            <AvatarImage src={session?.user?.image || ""} alt={userName} />
-            <AvatarFallback className="gradient-primary text-white text-xs">
-              {userName.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          {sidebarOpen && (
-            <div className="flex-1 overflow-hidden">
+              return navLink;
+            })}
+          </nav>
+        </ScrollArea>
+
+        {/* User Info */}
+        <div className="border-t border-sidebar-border p-3">
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-lg p-2",
+              !sidebarOpen && "lg:justify-center"
+            )}
+          >
+            <Avatar className="h-9 w-9 shrink-0 ring-2 ring-primary/20">
+              <AvatarImage src={session?.user?.image || ""} alt={userName} />
+              <AvatarFallback className="gradient-primary text-white text-xs">
+                {userName.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className={cn("flex-1 overflow-hidden", !sidebarOpen && "lg:hidden")}>
               <p className="text-sm font-semibold truncate">{userName}</p>
               <Badge
                 variant="outline"
@@ -251,9 +266,9 @@ export function DashboardSidebar() {
                 {roleLabels[currentRole]}
               </Badge>
             </div>
-          )}
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

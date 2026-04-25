@@ -146,13 +146,15 @@ export default function AssignmentSubmissionPage() {
           </Card>
 
           {submission ? (
-            <Card className="border-0 shadow-md">
-              <CardHeader className="bg-emerald-500/10 border-b border-emerald-500/20 pb-4">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+            <Card className="border-0 shadow-md overflow-hidden pt-0">
+              <CardHeader className="bg-emerald-500/10 border-b border-emerald-500/20 p-6">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="p-2 bg-emerald-500/20 rounded-full shrink-0">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  </div>
                   <div>
-                    <CardTitle className="text-emerald-700 dark:text-emerald-400">Tugas Telah Dikumpulkan</CardTitle>
-                    <CardDescription className="text-emerald-600/80 dark:text-emerald-400/80">
+                    <CardTitle className="text-emerald-800 dark:text-emerald-400 text-lg">Tugas Telah Dikumpulkan</CardTitle>
+                    <CardDescription className="text-emerald-600/90 dark:text-emerald-400/80 mt-1">
                       Disubmit pada {new Date(submission.submittedAt).toLocaleDateString("id-ID", {
                         day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"
                       })}

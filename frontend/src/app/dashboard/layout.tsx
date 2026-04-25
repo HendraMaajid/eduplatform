@@ -17,12 +17,12 @@ export default function DashboardLayout({
       <DashboardSidebar />
       <div
         className={cn(
-          "transition-all duration-300",
+          "transition-all duration-300 min-h-screen flex flex-col",
           sidebarOpen ? "lg:ml-64" : "lg:ml-[70px]"
         )}
       >
         <DashboardNavbar />
-        <main className="p-6">{children}</main>
+        <main className="flex-1 p-4 md:p-6 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

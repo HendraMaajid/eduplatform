@@ -67,6 +67,8 @@ export default function LandingPage() {
   const { theme, setTheme } = useTheme();
   const [courses, setCourses] = useState<any[]>([]);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -92,6 +94,7 @@ export default function LandingPage() {
             <span className="text-xl font-bold gradient-text">EduPlatform</span>
           </Link>
 
+          {/* Desktop Nav */}
           <nav className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-6">
             <button 
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} 
@@ -110,7 +113,7 @@ export default function LandingPage() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3 z-10">
+          <div className="flex items-center gap-2 sm:gap-3 z-10">
             <Button
               variant="ghost"
               size="icon"
@@ -120,16 +123,66 @@ export default function LandingPage() {
               <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             </Button>
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
               <Link href="/login">Masuk</Link>
             </Button>
             <Button size="sm" className="gradient-primary text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow" asChild>
               <Link href="/login">
-                Mulai Belajar <ArrowRight className="h-4 w-4 ml-1" />
+                Mulai <span className="hidden sm:inline ml-1">Belajar</span> <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
+            </Button>
+            
+            {/* Mobile Menu Toggle */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="md:hidden h-9 w-9"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              <span className="sr-only">Toggle menu</span>
+              {/* Using inline SVG since Menu/X might not be imported if I just added them */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                {isMobileMenuOpen ? (
+                  <>
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </>
+                ) : (
+                  <>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                    <line x1="4" y1="6" x2="20" y2="6"></line>
+                    <line x1="4" y1="18" x2="20" y2="18"></line>
+                  </>
+                )}
+              </svg>
             </Button>
           </div>
         </div>
+
+        {/* Mobile Nav Dropdown */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-16 left-0 right-0 border-b border-border/50 bg-background/95 backdrop-blur-xl shadow-lg animate-in slide-in-from-top-2 p-4 flex flex-col gap-4">
+            <button 
+              onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setIsMobileMenuOpen(false); }} 
+              className="text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2"
+            >
+              Home
+            </button>
+            <Link href="#courses" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2">
+              Kursus
+            </Link>
+            <Link href="#features" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2">
+              Fitur
+            </Link>
+            <Link href="#categories" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2">
+              Kategori
+            </Link>
+            <div className="h-px bg-border my-2" />
+            <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-foreground p-2">
+              Masuk
+            </Link>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}
@@ -141,30 +194,30 @@ export default function LandingPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-[120px]" />
         </div>
 
-        <div className="container mx-auto px-4 py-16 md:py-0">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
+        <div className="container mx-auto px-4 py-16 md:py-0 mt-8 md:mt-0">
+          <div className="max-w-3xl mx-auto text-center space-y-6 md:space-y-8">
             <Badge variant="outline" className="gap-2 py-1.5 px-4 text-sm border-primary/30 bg-primary/5">
               <Sparkles className="h-4 w-4 text-primary" />
               Platform Pembelajaran #1 di Indonesia
             </Badge>
 
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
               Tingkatkan Skill Anda dengan{" "}
               <span className="gradient-text">Kursus Berkualitas</span>
             </h1>
 
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
               Pelajari teknologi terkini dari instruktur berpengalaman.
               Bangun portofolio nyata dan dapatkan sertifikat profesional.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" className="gradient-primary text-white shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all text-base px-8" asChild>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 w-full px-4 sm:px-0">
+              <Button size="lg" className="w-full sm:w-auto gradient-primary text-white shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all text-base px-8" asChild>
                 <Link href="/login">
                   Mulai Belajar Gratis <ArrowRight className="h-5 w-5 ml-2" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" className="text-base px-8" asChild>
+              <Button size="lg" variant="outline" className="w-full sm:w-auto text-base px-8" asChild>
                 <Link href="#courses">
                   <Play className="h-5 w-5 mr-2" />
                   Jelajahi Kursus
