@@ -22,6 +22,7 @@
 - [Prerequisites](#-prerequisites)
 - [Setup & Instalasi](#-setup--instalasi)
   - [1. Setup Database Supabase](#1-setup-database-supabase)
+  - [1b. Setup Database Lokal (Rekomendasi untuk Dev)](#1b-setup-database-postgresql-lokal-rekomendasi-untuk-development)
   - [2. Setup Backend (Go)](#2-setup-backend-go)
   - [3. Setup Frontend (Next.js)](#3-setup-frontend-nextjs)
 - [Menjalankan Project](#-menjalankan-project)
@@ -184,6 +185,7 @@ Pastikan sudah terinstall di sistem Anda:
 | **Node.js** | 18+ (disarankan 20+) | [nodejs.org](https://nodejs.org/) |
 | **npm** | 9+ | (bundled with Node.js) |
 | **Git** | 2.0+ | [git-scm.com](https://git-scm.com/) |
+| **PostgreSQL** | 14+ (opsional, untuk dev lokal) | [postgresql.org](https://www.postgresql.org/download/) |
 
 ---
 
@@ -211,6 +213,96 @@ Pastikan sudah terinstall di sistem Anda:
    - Ganti `[YOUR-PASSWORD]` dengan password database yang tadi Anda buat
 
    > ⚠️ **Penting:** Jika password mengandung karakter khusus (`@`, `!`, `$`, `/`, dll.), pastikan sudah di-URL encode. Contoh: `!` → `%21`, `/` → `%2F`, `$` → `%24`
+
+---
+
+### 1b. Setup Database PostgreSQL Lokal (Rekomendasi untuk Development)
+
+> ⚡ **Kenapa pakai database lokal?** Supabase berjalan di cloud (remote server), sehingga setiap query memiliki **network latency ~90-300ms**. Dengan database lokal, query yang sama hanya butuh **<1ms**. Ini membuat pengalaman development jauh lebih cepat dan responsif.
+
+| Database | Query Sederhana | Query Kompleks | Keterangan |
+|----------|----------------|----------------|------------|
+| **Supabase (Remote)** | ~90-200ms | ~250-500ms | Tergantung jarak ke server |
+| **PostgreSQL Lokal** | <1ms | 1-5ms | ⚡ Instan |
+
+#### Install PostgreSQL
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S postgresql
+sudo -u postgres initdb -D /var/lib/postgres/data
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+**macOS (Homebrew):**
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+```
+
+#### Buat Database
+
+```bash
+# Cek apakah PostgreSQL sudah berjalan
+pg_isready
+
+# Buat database baru untuk development
+psql -U postgres -c "CREATE DATABASE educourse_dev;"
+```
+
+> Jika mendapat error `role "username" does not exist`, gunakan `psql -U postgres` untuk connect sebagai user postgres.
+
+#### Konfigurasi Backend
+
+Edit file `backend/.env`, ganti `DATABASE_URL` ke database lokal:
+
+```env
+# ===== PostgreSQL LOKAL (CEPAT - untuk development) =====
+DATABASE_URL=postgresql://postgres@localhost:5432/educourse_dev?sslmode=disable
+
+# ===== SUPABASE (REMOTE - untuk production) =====
+# DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
+
+PORT=8080
+JWT_SECRET=ganti-dengan-secret-key-yang-aman
+FRONTEND_URL=http://localhost:3000
+```
+
+> ⚠️ **Penting:** Jika PostgreSQL lokal Anda memiliki password, format URL-nya:
+> ```
+> postgresql://postgres:PASSWORD@localhost:5432/educourse_dev?sslmode=disable
+> ```
+
+Setelah diganti, jalankan backend seperti biasa:
+```bash
+cd backend
+go run cmd/main.go
+```
+
+Backend akan otomatis membuat semua tabel dan menjalankan seeder di database lokal.
+
+#### Cara Switch antara Lokal dan Supabase
+
+Cukup comment/uncomment baris `DATABASE_URL` di `backend/.env`:
+
+```env
+# Pakai LOKAL (development):
+DATABASE_URL=postgresql://postgres@localhost:5432/educourse_dev?sslmode=disable
+# DATABASE_URL=postgresql://postgres:[PASS]@db.[REF].supabase.co:5432/postgres
+
+# Pakai SUPABASE (production/testing):
+# DATABASE_URL=postgresql://postgres@localhost:5432/educourse_dev?sslmode=disable
+DATABASE_URL=postgresql://postgres:[PASS]@db.[REF].supabase.co:5432/postgres
+```
+
+> 📌 **Catatan:** Data di database lokal dan Supabase terpisah. Saat pertama kali switch, backend akan auto-migrate dan seed ulang data dummy.
 
 ---
 
@@ -253,8 +345,6 @@ go run cmd/main.go
 > Backend akan otomatis:
 > - Membuat tabel-tabel di database (auto-migrate)
 > - Menjalankan seeder untuk data dummy
-
----
 
 ### 3. Setup Frontend (Next.js)
 
