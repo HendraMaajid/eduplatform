@@ -11,72 +11,22 @@ import (
 
 func GetAllCourses(teacherID string) ([]model.Course, error) {
 	var courses []model.Course
-	query := database.DB.Preload("Teacher")
+
+	// Single query with subquery counts (2 round-trips instead of 5: this query + teacher preload)
+	query := database.DB.
+		Select(`courses.*,
+			(SELECT count(*) FROM modules WHERE modules.course_id = courses.id AND modules.deleted_at IS NULL) as total_modules,
+			(SELECT count(*) FROM quizzes WHERE quizzes.course_id = courses.id AND quizzes.deleted_at IS NULL) as total_quizzes,
+			(SELECT count(*) FROM assignments WHERE assignments.course_id = courses.id AND assignments.deleted_at IS NULL) as total_assignments,
+			(SELECT count(*) FROM enrollments WHERE enrollments.course_id = courses.id AND enrollments.deleted_at IS NULL) as enrolled_students`).
+		Preload("Teacher")
+
 	if teacherID != "" {
-		query = query.Where("teacher_id = ?", teacherID)
+		query = query.Where("courses.teacher_id = ?", teacherID)
 	}
+
 	err := query.Find(&courses).Error
-	if err != nil {
-		return nil, err
-	}
-
-	if len(courses) == 0 {
-		return courses, nil
-	}
-
-	// Collect all course IDs for batch queries (avoids N+1)
-	courseIDs := make([]uuid.UUID, len(courses))
-	courseMap := make(map[uuid.UUID]int, len(courses))
-	for i, c := range courses {
-		courseIDs[i] = c.ID
-		courseMap[c.ID] = i
-	}
-
-	// Batch count modules
-	type CountResult struct {
-		CourseID uuid.UUID
-		Count    int
-	}
-
-	var moduleCounts []CountResult
-	database.DB.Model(&model.Module{}).
-		Select("course_id, count(*) as count").
-		Where("course_id IN ?", courseIDs).
-		Group("course_id").
-		Scan(&moduleCounts)
-	for _, mc := range moduleCounts {
-		if idx, ok := courseMap[mc.CourseID]; ok {
-			courses[idx].TotalModules = mc.Count
-		}
-	}
-
-	// Batch count quizzes
-	var quizCounts []CountResult
-	database.DB.Model(&model.Quiz{}).
-		Select("course_id, count(*) as count").
-		Where("course_id IN ?", courseIDs).
-		Group("course_id").
-		Scan(&quizCounts)
-	for _, qc := range quizCounts {
-		if idx, ok := courseMap[qc.CourseID]; ok {
-			courses[idx].TotalQuizzes = qc.Count
-		}
-	}
-
-	// Batch count enrolled students
-	var enrollCounts []CountResult
-	database.DB.Model(&model.Enrollment{}).
-		Select("course_id, count(*) as count").
-		Where("course_id IN ?", courseIDs).
-		Group("course_id").
-		Scan(&enrollCounts)
-	for _, ec := range enrollCounts {
-		if idx, ok := courseMap[ec.CourseID]; ok {
-			courses[idx].EnrolledStudents = ec.Count
-		}
-	}
-
-	return courses, nil
+	return courses, err
 }
 
 func GetCourseByID(id string) (*model.Course, error) {

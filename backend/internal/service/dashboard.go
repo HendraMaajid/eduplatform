@@ -39,16 +39,14 @@ type StudentDashboardStats struct {
 func GetAdminStats() (*AdminDashboardStats, error) {
 	var stats AdminDashboardStats
 
-	database.DB.Model(&model.User{}).Where("role = ?", "student").Count(&stats.TotalStudents)
-	database.DB.Model(&model.User{}).Where("role = ?", "teacher").Count(&stats.TotalTeachers)
-	database.DB.Model(&model.Course{}).Count(&stats.TotalCourses)
-
-	// Calculate total revenue from all payments
-	var totalRevenue struct {
-		Total int64
-	}
-	database.DB.Model(&model.Payment{}).Select("sum(amount) as total").Scan(&totalRevenue)
-	stats.TotalRevenue = totalRevenue.Total
+	// Single query to get all counts (1 round-trip instead of 4)
+	database.DB.Raw(`
+		SELECT 
+			(SELECT count(*) FROM users WHERE role = 'student' AND deleted_at IS NULL) as total_students,
+			(SELECT count(*) FROM users WHERE role = 'teacher' AND deleted_at IS NULL) as total_teachers,
+			(SELECT count(*) FROM courses WHERE deleted_at IS NULL) as total_courses,
+			(SELECT COALESCE(sum(amount), 0) FROM payments) as total_revenue
+	`).Scan(&stats)
 
 	return &stats, nil
 }
@@ -56,24 +54,13 @@ func GetAdminStats() (*AdminDashboardStats, error) {
 func GetTeacherStats(teacherID string) (*TeacherDashboardStats, error) {
 	var stats TeacherDashboardStats
 
-	database.DB.Model(&model.Course{}).Where("teacher_id = ?", teacherID).Count(&stats.TotalCourses)
-
-	// Calculate total students enrolled in this teacher's courses
-	var enrolledStudents int64
-	database.DB.Model(&model.Enrollment{}).
-		Joins("JOIN courses ON courses.id = enrollments.course_id").
-		Where("courses.teacher_id = ?", teacherID).
-		Count(&enrolledStudents)
-	stats.TotalStudents = enrolledStudents
-
-	// Pending submissions
-	var pendingSubmissions int64
-	database.DB.Model(&model.Submission{}).
-		Joins("JOIN assignments ON assignments.id = submissions.assignment_id").
-		Joins("JOIN courses ON courses.id = assignments.course_id").
-		Where("courses.teacher_id = ? AND submissions.status = ?", teacherID, "submitted").
-		Count(&pendingSubmissions)
-	stats.PendingSubmissions = pendingSubmissions
+	// Single query for all teacher stats (1 round-trip instead of 3)
+	database.DB.Raw(`
+		SELECT 
+			(SELECT count(*) FROM courses WHERE teacher_id = ? AND deleted_at IS NULL) as total_courses,
+			(SELECT count(*) FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE c.teacher_id = ? AND e.deleted_at IS NULL AND c.deleted_at IS NULL) as total_students,
+			(SELECT count(*) FROM submissions s JOIN assignments a ON a.id = s.assignment_id JOIN courses c ON c.id = a.course_id WHERE c.teacher_id = ? AND s.status = 'submitted' AND s.deleted_at IS NULL AND a.deleted_at IS NULL AND c.deleted_at IS NULL) as pending_submissions
+	`, teacherID, teacherID, teacherID).Scan(&stats)
 
 	return &stats, nil
 }
