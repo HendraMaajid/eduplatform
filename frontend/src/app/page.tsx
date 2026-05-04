@@ -127,7 +127,7 @@ export default function LandingPage() {
               <Link href="/login">Masuk</Link>
             </Button>
             <Button size="sm" className="gradient-primary text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow" asChild>
-              <Link href="/login">
+              <Link href="/register">
                 Mulai <span className="hidden sm:inline ml-1">Belajar</span> <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>
@@ -213,7 +213,7 @@ export default function LandingPage() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 w-full px-4 sm:px-0">
               <Button size="lg" className="w-full sm:w-auto gradient-primary text-white shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all text-base px-8" asChild>
-                <Link href="/login">
+                <Link href="/register">
                   Mulai Belajar Gratis <ArrowRight className="h-5 w-5 ml-2" />
                 </Link>
               </Button>
@@ -341,7 +341,7 @@ export default function LandingPage() {
                         {formatCurrency(course.price)}
                       </span>
                       <Button size="sm" className="gap-1" asChild>
-                        <Link href="/login">
+                        <Link href="/register">
                           Daftar <ArrowRight className="h-3 w-3" />
                         </Link>
                       </Button>
@@ -391,7 +391,7 @@ export default function LandingPage() {
                 Bergabung dengan ribuan pelajar dan mulai bangun karir impian Anda hari ini.
               </p>
               <Button size="lg" variant="secondary" className="text-base px-8 shadow-xl" asChild>
-                <Link href="/login">
+                <Link href="/register">
                   Daftar Sekarang — Gratis <ArrowRight className="h-5 w-5 ml-2" />
                 </Link>
               </Button>
