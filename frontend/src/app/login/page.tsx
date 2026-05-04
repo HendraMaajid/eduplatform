@@ -186,6 +186,10 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
+          Belum punya akun?{" "}
+          <Link href="/register" className="text-primary hover:underline">Daftar di sini</Link>
+        </p>
+        <p className="text-center text-xs text-muted-foreground mt-3">
           Dengan masuk, Anda menyetujui{" "}
           <Link href="#" className="text-primary hover:underline">Syarat & Ketentuan</Link>
           {" "}dan{" "}
