@@ -5,11 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"backend/internal/dto"
 	"backend/internal/model"
 	"backend/pkg/cache"
 	"backend/pkg/database"
+
+	"github.com/google/uuid"
 )
 
 // AppCache is a shared in-memory cache for read-heavy endpoints.
@@ -61,7 +62,7 @@ func GetCourseByID(id string) (*model.Course, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Count related items for computed fields
 	var modulesCount int64
 	database.DB.Model(&model.Module{}).Where("course_id = ?", course.ID).Count(&modulesCount)
@@ -94,7 +95,12 @@ func CreateCourse(req dto.CreateCourseRequest, contextTeacherID string) (*model.
 		Level:            req.Level,
 		Thumbnail:        req.Thumbnail,
 		TeacherID:        parsedTeacherID,
-		Status:           func() string { if req.Status != "" { return req.Status }; return "draft" }(),
+		Status: func() string {
+			if req.Status != "" {
+				return req.Status
+			}
+			return "draft"
+		}(),
 	}
 
 	if err := database.DB.Create(&course).Error; err != nil {
