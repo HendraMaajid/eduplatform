@@ -27,9 +27,9 @@ type Course struct {
 	UpdatedAt        time.Time      `json:"-"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 
-	// Computed fields (not in DB)
-	TotalModules     int `gorm:"-" json:"totalModules"`
-	TotalQuizzes     int `gorm:"-" json:"totalQuizzes"`
-	TotalAssignments int `gorm:"-" json:"totalAssignments"`
-	EnrolledStudents int `gorm:"-" json:"enrolledStudents"`
+	// Computed fields (read-only, not persisted)
+	TotalModules     int `gorm:"->;column:total_modules" json:"totalModules"`
+	TotalQuizzes     int `gorm:"->;column:total_quizzes" json:"totalQuizzes"`
+	TotalAssignments int `gorm:"->;column:total_assignments" json:"totalAssignments"`
+	EnrolledStudents int `gorm:"->;column:enrolled_students" json:"enrolledStudents"`
 }

@@ -140,13 +140,25 @@
    ============================================ */
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(135deg, oklch(0.488 0.243 264.376), oklch(0.541 0.281 293.009));
+    background: linear-gradient(
+      135deg,
+      oklch(0.488 0.243 264.376),
+      oklch(0.541 0.281 293.009)
+    );
   }
   .gradient-primary-dark {
-    background: linear-gradient(135deg, oklch(0.585 0.233 277), oklch(0.641 0.281 293.009));
+    background: linear-gradient(
+      135deg,
+      oklch(0.585 0.233 277),
+      oklch(0.641 0.281 293.009)
+    );
   }
   .gradient-text {
-    background: linear-gradient(135deg, oklch(0.488 0.243 264.376), oklch(0.541 0.281 293.009));
+    background: linear-gradient(
+      135deg,
+      oklch(0.488 0.243 264.376),
+      oklch(0.541 0.281 293.009)
+    );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -179,23 +191,44 @@
    Animations
    ============================================ */
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slide-in-right {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @layer utilities {
@@ -274,41 +307,88 @@
   background-color: hsl(var(--muted) / 0.5);
 }
 
+.dark .ql-toolbar.ql-snow,
+.dark .ql-toolbar.ql-snow button,
+.dark .ql-toolbar.ql-snow .ql-picker-label,
+.dark .ql-toolbar.ql-snow .ql-picker-item {
+  color: #fff;
+}
+
+.dark .ql-toolbar.ql-snow button {
+  opacity: 0.9;
+}
+
 .dark .ql-container.ql-snow {
   background-color: transparent;
 }
 
 .dark .ql-snow .ql-stroke {
-  stroke: hsl(var(--foreground));
+  stroke: #fff;
 }
 
 .dark .ql-snow .ql-fill,
 .dark .ql-snow .ql-stroke.ql-fill {
-  fill: hsl(var(--foreground));
+  fill: #fff;
+}
+
+/* Ensure toolbar icons are visible in dark mode */
+.dark .ql-toolbar.ql-snow .ql-stroke {
+  stroke: #fff !important;
+}
+
+.dark .ql-toolbar.ql-snow .ql-fill,
+.dark .ql-toolbar.ql-snow .ql-stroke.ql-fill {
+  fill: #fff !important;
 }
 
 .dark .ql-snow .ql-picker {
-  color: hsl(var(--foreground));
+  color: #fff;
+}
+
+.dark .ql-snow .ql-picker-label {
+  color: #fff;
 }
 
 .dark .ql-snow .ql-picker-options {
   background-color: hsl(var(--popover));
   border-color: hsl(var(--border));
+  color: #fff;
+  box-shadow: 0 8px 20px hsl(var(--foreground) / 0.1);
+}
+
+.dark .ql-snow .ql-picker-item {
+  color: #fff;
 }
 
 .dark .ql-snow .ql-picker-label:hover,
 .dark .ql-snow .ql-picker-label.ql-active,
 .dark .ql-snow .ql-picker-item:hover,
 .dark .ql-snow .ql-picker-item.ql-selected {
-  color: hsl(var(--primary));
+  color: #fff;
+}
+
+.dark .ql-toolbar.ql-snow button:hover,
+.dark .ql-toolbar.ql-snow button.ql-active,
+.dark .ql-toolbar.ql-snow .ql-picker-label:hover,
+.dark .ql-toolbar.ql-snow .ql-picker-label.ql-active {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.dark .ql-toolbar.ql-snow button.ql-active {
+  border-radius: 0.25rem;
+}
+
+.dark .ql-toolbar.ql-snow .ql-picker-label::before,
+.dark .ql-toolbar.ql-snow .ql-picker-item::before {
+  color: #fff;
 }
 
 .dark .ql-snow button:hover .ql-stroke,
 .dark .ql-snow .ql-picker-label:hover .ql-stroke {
-  stroke: hsl(var(--primary));
+  stroke: #fff;
 }
 
 .dark .ql-snow button:hover .ql-fill,
 .dark .ql-snow .ql-picker-label:hover .ql-fill {
-  fill: hsl(var(--primary));
+  fill: #fff;
 }
