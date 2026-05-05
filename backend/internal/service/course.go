@@ -186,7 +186,7 @@ func CreateModule(courseID string, req dto.CreateModuleRequest) (*model.Module, 
 		Content:     req.Content,
 		Duration:    req.Duration,
 		Order:       req.Order,
-		IsPublished: false,
+		IsPublished: req.IsPublished,
 	}
 
 	if err := database.DB.Create(&module).Error; err != nil {

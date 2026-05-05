@@ -18,6 +18,7 @@ type CreateModuleRequest struct {
 	Content     string `json:"content"`
 	Duration    string `json:"duration"`
 	Order       int    `json:"order"`
+	IsPublished bool   `json:"isPublished"`
 }
 
 type UpdateModuleRequest struct {
