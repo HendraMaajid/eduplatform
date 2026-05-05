@@ -4,12 +4,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"backend/internal/handler"
 	"backend/internal/middleware"
 	"backend/internal/seed"
 	"backend/pkg/database"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
@@ -36,6 +37,15 @@ func main() {
 	if os.Getenv("SKIP_SEED") != "true" {
 		seed.SeedAll()
 		seed.SeedAdminIfMissing()
+	}
+
+	if countStr := os.Getenv("SEED_TEST_STUDENTS"); countStr != "" {
+		count, err := strconv.Atoi(countStr)
+		if err != nil {
+			log.Printf("Invalid SEED_TEST_STUDENTS value: %s", countStr)
+		} else if err := seed.SeedTestStudents(count); err != nil {
+			log.Printf("Failed to seed test students: %v", err)
+		}
 	}
 
 	// Initialize Gin router
@@ -75,18 +85,18 @@ func main() {
 		{
 			// Users
 			protected.GET("/users/me", handler.GetMe)
-			
+
 			// Notifications
 			protected.GET("/notifications", handler.GetNotifications)
 			protected.PUT("/notifications/:id/read", handler.MarkNotificationAsRead)
 			protected.PUT("/notifications/read-all", handler.MarkAllNotificationsAsRead)
-			
+
 			// Student Dashboard Routes
 			protected.GET("/dashboard/student", handler.GetStudentDashboard)
 			protected.GET("/enrollments", handler.GetMyEnrollments)
 			protected.GET("/submissions", handler.GetMySubmissions)
 			protected.GET("/certificates", handler.GetMyCertificates)
-			
+
 			// Course actions
 			protected.POST("/courses/:id/enroll", handler.EnrollCourse)
 			protected.POST("/courses/:id/modules/:moduleId/complete", handler.CompleteModule)
@@ -118,7 +128,7 @@ func main() {
 				teacherOnly.PUT("/questions/:id", handler.UpdateQuestion)
 				teacherOnly.DELETE("/questions/:id", handler.DeleteQuestion)
 			}
-			
+
 			adminOnly := protected.Group("/")
 			adminOnly.Use(middleware.RequireRole("super_admin", "admin"))
 			{
@@ -128,7 +138,7 @@ func main() {
 				adminOnly.POST("/users", handler.CreateUser)
 				adminOnly.PUT("/users/:id", handler.UpdateUser)
 				adminOnly.DELETE("/users/:id", handler.DeleteUser)
-				
+
 				adminOnly.PUT("/courses/:id", handler.UpdateCourse)
 				adminOnly.DELETE("/courses/:id", handler.DeleteCourse)
 			}

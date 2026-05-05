@@ -44,8 +44,8 @@ func InitDB() {
 		log.Fatal("Failed to get underlying sql.DB:", err)
 	}
 
-	sqlDB.SetMaxOpenConns(10)                  // Max open connections
-	sqlDB.SetMaxIdleConns(5)                   // Keep 5 idle connections ready
+	sqlDB.SetMaxOpenConns(25)                  // Max open connections
+	sqlDB.SetMaxIdleConns(15)                   // Keep 5 idle connections ready
 	sqlDB.SetConnMaxLifetime(30 * time.Minute) // Recycle connections every 30 min
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)  // Close idle connections after 5 min
 

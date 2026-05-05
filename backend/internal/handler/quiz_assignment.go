@@ -1,17 +1,18 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"backend/internal/dto"
 	"backend/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
 // Quizzes
 func GetQuizzes(c *gin.Context) {
 	courseID := c.Param("id")
-	quizzes, err := service.GetQuizzesByCourse(courseID)
+	quizzes, err := service.GetQuizzesByCourse(c.Request.Context(), courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -27,7 +28,7 @@ func CreateQuiz(c *gin.Context) {
 		return
 	}
 
-	quiz, err := service.CreateQuiz(courseID, req)
+	quiz, err := service.CreateQuiz(c.Request.Context(), courseID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -44,7 +45,7 @@ func UpdateQuiz(c *gin.Context) {
 		return
 	}
 
-	quiz, err := service.UpdateQuiz(id, req)
+	quiz, err := service.UpdateQuiz(c.Request.Context(), id, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -55,7 +56,7 @@ func UpdateQuiz(c *gin.Context) {
 
 func DeleteQuiz(c *gin.Context) {
 	id := c.Param("id")
-	if err := service.DeleteQuiz(id); err != nil {
+	if err := service.DeleteQuiz(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -66,7 +67,7 @@ func DeleteQuiz(c *gin.Context) {
 // Assignments
 func GetAssignments(c *gin.Context) {
 	courseID := c.Param("id")
-	assignments, err := service.GetAssignmentsByCourse(courseID)
+	assignments, err := service.GetAssignmentsByCourse(c.Request.Context(), courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -82,7 +83,7 @@ func CreateAssignment(c *gin.Context) {
 		return
 	}
 
-	assignment, err := service.CreateAssignment(courseID, req)
+	assignment, err := service.CreateAssignment(c.Request.Context(), courseID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -99,7 +100,7 @@ func UpdateAssignment(c *gin.Context) {
 		return
 	}
 
-	assignment, err := service.UpdateAssignment(id, req)
+	assignment, err := service.UpdateAssignment(c.Request.Context(), id, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -110,7 +111,7 @@ func UpdateAssignment(c *gin.Context) {
 
 func DeleteAssignment(c *gin.Context) {
 	id := c.Param("id")
-	if err := service.DeleteAssignment(id); err != nil {
+	if err := service.DeleteAssignment(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -121,7 +122,7 @@ func DeleteAssignment(c *gin.Context) {
 // Questions
 func GetQuestions(c *gin.Context) {
 	quizID := c.Param("id")
-	questions, err := service.GetQuestionsByQuiz(quizID)
+	questions, err := service.GetQuestionsByQuiz(c.Request.Context(), quizID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -137,7 +138,7 @@ func CreateQuestion(c *gin.Context) {
 		return
 	}
 
-	question, err := service.CreateQuestion(quizID, req)
+	question, err := service.CreateQuestion(c.Request.Context(), quizID, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -154,7 +155,7 @@ func UpdateQuestion(c *gin.Context) {
 		return
 	}
 
-	question, err := service.UpdateQuestion(id, req)
+	question, err := service.UpdateQuestion(c.Request.Context(), id, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -165,7 +166,7 @@ func UpdateQuestion(c *gin.Context) {
 
 func DeleteQuestion(c *gin.Context) {
 	id := c.Param("id")
-	if err := service.DeleteQuestion(id); err != nil {
+	if err := service.DeleteQuestion(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -174,7 +175,16 @@ func DeleteQuestion(c *gin.Context) {
 }
 
 func SubmitQuiz(c *gin.Context) {
-	studentID, _ := c.Get("userID")
+	studentIDValue, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	studentID, ok := studentIDValue.(string)
+	if !ok || studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	quizID := c.Param("id")
 
 	var req dto.SubmitQuizRequest
@@ -183,8 +193,12 @@ func SubmitQuiz(c *gin.Context) {
 		return
 	}
 
-	attempt, err := service.SubmitQuiz(studentID.(string), quizID, req)
+	attempt, err := service.SubmitQuiz(c.Request.Context(), studentID, quizID, req)
 	if err != nil {
+		if errors.Is(err, service.ErrNotEnrolled) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Not enrolled in this course"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -193,10 +207,19 @@ func SubmitQuiz(c *gin.Context) {
 }
 
 func GetQuizAttempt(c *gin.Context) {
-	studentID, _ := c.Get("userID")
+	studentIDValue, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	studentID, ok := studentIDValue.(string)
+	if !ok || studentID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	quizID := c.Param("id")
 
-	attempt, err := service.GetQuizAttempt(studentID.(string), quizID)
+	attempt, err := service.GetQuizAttempt(c.Request.Context(), studentID, quizID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Attempt not found"})
 		return

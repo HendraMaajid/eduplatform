@@ -57,25 +57,25 @@ type Quiz struct {
 
 type Question struct {
 	ID            uuid.UUID   `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	QuizID        uuid.UUID   `gorm:"type:uuid;not null;index" json:"quizId"`
+	QuizID        uuid.UUID   `gorm:"type:uuid;not null;index;index:idx_questions_quiz_order,priority:1" json:"quizId"`
 	Type          string      `gorm:"size:20;not null" json:"type"`
 	Text          string      `gorm:"type:text;not null" json:"text"`
 	Options       StringArray `gorm:"type:jsonb" json:"options,omitempty"`
 	CorrectAnswer string      `gorm:"size:500;not null" json:"correctAnswer"`
 	Points        int         `gorm:"default:10" json:"points"`
-	Order         int         `gorm:"default:0" json:"order"`
+	Order         int         `gorm:"default:0;index:idx_questions_quiz_order,priority:2" json:"order"`
 }
 
 type QuizAttempt struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	QuizID      uuid.UUID `gorm:"type:uuid;not null;index;index:idx_attempt_student_quiz" json:"quizId"`
+	QuizID      uuid.UUID `gorm:"type:uuid;not null;index;index:idx_attempt_student_quiz,priority:2;index:idx_attempt_student_quiz_completed,priority:2" json:"quizId"`
 	Quiz        *Quiz     `gorm:"foreignKey:QuizID" json:"quiz,omitempty"`
-	StudentID   uuid.UUID `gorm:"type:uuid;not null;index;index:idx_attempt_student_quiz" json:"studentId"`
+	StudentID   uuid.UUID `gorm:"type:uuid;not null;index;index:idx_attempt_student_quiz,priority:1;index:idx_attempt_student_quiz_completed,priority:1" json:"studentId"`
 	Student     *User     `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 	Score       int       `gorm:"default:0" json:"score"`
 	TotalPoints int       `gorm:"default:0" json:"totalPoints"`
 	Passed      bool      `gorm:"default:false" json:"passed"`
-	CompletedAt time.Time `json:"completedAt"`
+	CompletedAt time.Time `gorm:"index:idx_attempt_student_quiz_completed,priority:3,sort:desc" json:"completedAt"`
 
 	Answers []QuizAnswer `gorm:"foreignKey:AttemptID" json:"answers"`
 }

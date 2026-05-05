@@ -1,11 +1,13 @@
 package seed
 
 import (
+	"fmt"
 	"log"
 
 	"backend/internal/model"
 	"backend/pkg/database"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm/clause"
 )
 
 func SeedAll() {
@@ -109,4 +111,37 @@ func SeedAdminIfMissing() {
 		database.DB.Create(&admin)
 		log.Println("Admin user created successfully!")
 	}
+}
+
+// SeedTestStudents creates deterministic student accounts for load testing.
+func SeedTestStudents(count int) error {
+	if count <= 0 {
+		return nil
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	students := make([]model.User, 0, count)
+	for i := 1; i <= count; i++ {
+		students = append(students, model.User{
+			Name:         fmt.Sprintf("Load Test Student %04d", i),
+			Email:        fmt.Sprintf("loadtest_student_%04d@example.com", i),
+			PasswordHash: string(hashedPassword),
+			Role:         "student",
+		})
+	}
+
+	result := database.DB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "email"}},
+		DoNothing: true,
+	}).CreateInBatches(students, 200)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	log.Printf("Seeded %d load test students (duplicates ignored)", count)
+	return nil
 }

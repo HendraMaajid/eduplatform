@@ -3,13 +3,14 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
-	"github.com/google/uuid"
 	"backend/internal/dto"
 	"backend/internal/model"
 	"backend/pkg/database"
+	"github.com/google/uuid"
 )
 
 // Enrollment
@@ -65,7 +66,9 @@ func EnrollCourse(studentID string, courseID string, req dto.EnrollCourseRequest
 	var student model.User
 	database.DB.First(&student, "id = ?", studentID)
 	if course.TeacherID != uuid.Nil {
-		CreateNotification(course.TeacherID.String(), "Pendaftaran Baru", fmt.Sprintf("%s mendaftar di %s", student.Name, course.Title), "info", "/dashboard/teacher/courses")
+		if err := CreateNotification(course.TeacherID.String(), "Pendaftaran Baru", fmt.Sprintf("%s mendaftar di %s", student.Name, course.Title), "info", "/dashboard/teacher/courses"); err != nil {
+			log.Printf("CreateNotification failed (enroll): %v", err)
+		}
 	}
 
 	// Invalidate related caches
@@ -123,7 +126,7 @@ func recalculateProgress(studentID string, courseID string, enrollment *model.En
 		SELECT
 			(SELECT count(*) FROM modules WHERE course_id = ? AND deleted_at IS NULL) as total_modules,
 			(SELECT count(*) FROM quizzes WHERE course_id = ? AND deleted_at IS NULL) as total_quizzes,
-			(SELECT count(DISTINCT qa.quiz_id) FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id WHERE q.course_id = ? AND qa.student_id = ? AND q.deleted_at IS NULL) as completed_quizzes,
+			(SELECT count(DISTINCT qa.quiz_id) FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id WHERE q.course_id = ? AND qa.student_id = ? AND qa.passed = true AND q.deleted_at IS NULL) as completed_quizzes,
 			(SELECT count(*) FROM assignments WHERE course_id = ? AND deleted_at IS NULL) as total_assignments,
 			(SELECT count(*) FROM submissions s JOIN assignments a ON a.id = s.assignment_id WHERE a.course_id = ? AND s.student_id = ? AND s.score >= 80 AND s.deleted_at IS NULL AND a.deleted_at IS NULL) as graded_assignments
 	`, courseID, courseID, courseID, studentID, courseID, courseID, studentID).Scan(&counts)
@@ -210,7 +213,9 @@ func SubmitAssignment(studentID string, assignmentID string, req dto.SubmitAssig
 	var student model.User
 	database.DB.First(&student, "id = ?", studentID)
 	if assignment.Course != nil && assignment.Course.TeacherID != uuid.Nil {
-		CreateNotification(assignment.Course.TeacherID.String(), "Submission Baru", fmt.Sprintf("%s mengumpulkan tugas '%s'", student.Name, assignment.Title), "info", "/dashboard/teacher/grading")
+		if err := CreateNotification(assignment.Course.TeacherID.String(), "Submission Baru", fmt.Sprintf("%s mengumpulkan tugas '%s'", student.Name, assignment.Title), "info", "/dashboard/teacher/grading"); err != nil {
+			log.Printf("CreateNotification failed (submit assignment): %v", err)
+		}
 	}
 
 	return &submission, nil
@@ -224,7 +229,7 @@ func GradeSubmission(submissionID string, req dto.GradeSubmissionRequest) (*mode
 
 	submission.Score = req.Score
 	submission.Feedback = req.Feedback
-	
+
 	if req.Score >= 80 {
 		submission.Status = "passed"
 	} else {
@@ -244,8 +249,10 @@ func GradeSubmission(submissionID string, req dto.GradeSubmissionRequest) (*mode
 			recalculateProgress(studentID, courseID, &enrollment)
 			database.DB.Save(&enrollment)
 		}
-		
-		CreateNotification(submission.StudentID.String(), "Nilai Tugas", fmt.Sprintf("Tugas '%s' telah dinilai. Skor: %d/100", submission.Assignment.Title, req.Score), "info", fmt.Sprintf("/dashboard/student/courses/%s/assignments/%s", courseID, submission.AssignmentID.String()))
+
+		if err := CreateNotification(submission.StudentID.String(), "Nilai Tugas", fmt.Sprintf("Tugas '%s' telah dinilai. Skor: %d/100", submission.Assignment.Title, req.Score), "info", fmt.Sprintf("/dashboard/student/courses/%s/assignments/%s", courseID, submission.AssignmentID.String())); err != nil {
+			log.Printf("CreateNotification failed (grade submission): %v", err)
+		}
 	}
 
 	return &submission, nil

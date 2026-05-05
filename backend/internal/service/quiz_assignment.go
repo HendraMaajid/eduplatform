@@ -1,23 +1,29 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"backend/internal/dto"
 	"backend/internal/model"
 	"backend/pkg/database"
 )
 
+var ErrNotEnrolled = errors.New("student not enrolled in this course")
+
 // Quizzes
-func GetQuizzesByCourse(courseID string) ([]model.Quiz, error) {
+func GetQuizzesByCourse(ctx context.Context, courseID string) ([]model.Quiz, error) {
 	var quizzes []model.Quiz
-	err := database.DB.Preload("Questions").Where("course_id = ?", courseID).Find(&quizzes).Error
+	err := database.DB.WithContext(ctx).Preload("Questions").Where("course_id = ?", courseID).Find(&quizzes).Error
 	return quizzes, err
 }
 
-func CreateQuiz(courseID string, req dto.CreateQuizRequest) (*model.Quiz, error) {
+func CreateQuiz(ctx context.Context, courseID string, req dto.CreateQuizRequest) (*model.Quiz, error) {
 	parsedCourseID, err := uuid.Parse(courseID)
 	if err != nil {
 		return nil, err
@@ -32,16 +38,17 @@ func CreateQuiz(courseID string, req dto.CreateQuizRequest) (*model.Quiz, error)
 		IsPublished:  false,
 	}
 
-	if err := database.DB.Create(&quiz).Error; err != nil {
+	if err := database.DB.WithContext(ctx).Create(&quiz).Error; err != nil {
 		return nil, err
 	}
 
 	return &quiz, nil
 }
 
-func UpdateQuiz(id string, req dto.UpdateQuizRequest) (*model.Quiz, error) {
+func UpdateQuiz(ctx context.Context, id string, req dto.UpdateQuizRequest) (*model.Quiz, error) {
+	db := database.DB.WithContext(ctx)
 	var quiz model.Quiz
-	if err := database.DB.First(&quiz, "id = ?", id).Error; err != nil {
+	if err := db.First(&quiz, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 
@@ -59,24 +66,26 @@ func UpdateQuiz(id string, req dto.UpdateQuizRequest) (*model.Quiz, error) {
 		updates["time_limit"] = req.TimeLimit
 	}
 
-	if err := database.DB.Model(&quiz).Updates(updates).Error; err != nil {
+	if err := db.Model(&quiz).Updates(updates).Error; err != nil {
 		return nil, err
 	}
 
 	return &quiz, nil
 }
 
-func DeleteQuiz(id string) error {
+func DeleteQuiz(ctx context.Context, id string) error {
+	db := database.DB.WithContext(ctx)
 	var quiz model.Quiz
-	if err := database.DB.First(&quiz, "id = ?", id).Error; err != nil {
+	if err := db.First(&quiz, "id = ?", id).Error; err != nil {
 		return err
 	}
 
-	return database.DB.Delete(&quiz).Error
+	return db.Delete(&quiz).Error
 }
 
 // Assignments
-func SubmitQuiz(studentID string, quizID string, req dto.SubmitQuizRequest) (*model.QuizAttempt, error) {
+func SubmitQuiz(ctx context.Context, studentID string, quizID string, req dto.SubmitQuizRequest) (*model.QuizAttempt, error) {
+	db := database.DB.WithContext(ctx)
 	parsedStudentID, err := uuid.Parse(studentID)
 	if err != nil {
 		return nil, err
@@ -86,29 +95,54 @@ func SubmitQuiz(studentID string, quizID string, req dto.SubmitQuizRequest) (*mo
 		return nil, err
 	}
 
+	var existingAttempt model.QuizAttempt
+	attemptErr := db.Where("student_id = ? AND quiz_id = ?", parsedStudentID, parsedQuizID).
+		Order("completed_at desc").
+		First(&existingAttempt).Error
+	if attemptErr != nil && !errors.Is(attemptErr, gorm.ErrRecordNotFound) {
+		return nil, attemptErr
+	}
+	alreadyAttempted := attemptErr == nil
+	wasPassed := alreadyAttempted && existingAttempt.Passed
+
 	// Fetch quiz and its questions
 	var quiz model.Quiz
-	if err := database.DB.Preload("Questions").Where("id = ?", quizID).First(&quiz).Error; err != nil {
+	if err := db.Select("id", "course_id", "passing_score").
+		Preload("Questions", func(query *gorm.DB) *gorm.DB {
+			return query.Select("id", "quiz_id", "correct_answer", "points")
+		}).
+		Where("id = ?", parsedQuizID).
+		First(&quiz).Error; err != nil {
 		return nil, err
 	}
 
+	var enrollment model.Enrollment
+	if err := db.Where("student_id = ? AND course_id = ? AND status = ?", parsedStudentID, quiz.CourseID, "active").
+		First(&enrollment).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotEnrolled
+		}
+		return nil, err
+	}
+
+	now := time.Now()
 	attempt := model.QuizAttempt{
 		QuizID:      parsedQuizID,
 		StudentID:   parsedStudentID,
-		CompletedAt: time.Now(),
+		CompletedAt: now,
 		Score:       0,
 		TotalPoints: 0,
 	}
 
 	// Map questions for quick lookup
-	questionMap := make(map[uuid.UUID]model.Question)
+	questionMap := make(map[uuid.UUID]model.Question, len(quiz.Questions))
 	for _, q := range quiz.Questions {
 		questionMap[q.ID] = q
 		attempt.TotalPoints += q.Points
 	}
 
 	// Calculate score
-	var answers []model.QuizAnswer
+	answers := make([]model.QuizAnswer, 0, len(req.Answers))
 	for _, ansReq := range req.Answers {
 		qID, err := uuid.Parse(ansReq.QuestionID)
 		if err != nil {
@@ -145,18 +179,43 @@ func SubmitQuiz(studentID string, quizID string, req dto.SubmitQuizRequest) (*mo
 	if attempt.TotalPoints > 0 {
 		percentage = (attempt.Score * 100) / attempt.TotalPoints
 	}
-	attempt.Passed = percentage >= quiz.PassingScore
+	currentPassed := percentage >= quiz.PassingScore
+	attempt.Passed = currentPassed
 
 	// Save everything in a single transaction
-	tx := database.DB.Begin()
-	if err := tx.Create(&attempt).Error; err != nil {
-		tx.Rollback()
-		return nil, err
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+	var attemptID uuid.UUID
+	if alreadyAttempted {
+		if err := tx.Where("attempt_id = ?", existingAttempt.ID).Delete(&model.QuizAnswer{}).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		existingAttempt.Score = attempt.Score
+		existingAttempt.TotalPoints = attempt.TotalPoints
+		existingAttempt.Passed = existingAttempt.Passed || currentPassed
+		existingAttempt.CompletedAt = now
+		if err := tx.Save(&existingAttempt).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		attemptID = existingAttempt.ID
+	} else {
+		if err := tx.Create(&attempt).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		attemptID = attempt.ID
 	}
 
 	// Batch insert all answers in 1 query instead of N queries
 	for i := range answers {
-		answers[i].AttemptID = attempt.ID
+		answers[i].AttemptID = attemptID
 	}
 	if len(answers) > 0 {
 		if err := tx.CreateInBatches(answers, len(answers)).Error; err != nil {
@@ -165,21 +224,31 @@ func SubmitQuiz(studentID string, quizID string, req dto.SubmitQuizRequest) (*mo
 		}
 	}
 
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
 
 	// Recalculate enrollment progress
-	var enrollment model.Enrollment
-	if err := database.DB.Where("student_id = ? AND course_id = ?", studentID, quiz.CourseID.String()).First(&enrollment).Error; err == nil {
+	if currentPassed && !wasPassed {
+		previousProgress := enrollment.Progress
 		recalculateProgress(studentID, quiz.CourseID.String(), &enrollment)
-		database.DB.Save(&enrollment)
+		if enrollment.Progress != previousProgress {
+			if err := db.Save(&enrollment).Error; err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if alreadyAttempted {
+		return &existingAttempt, nil
 	}
 
 	return &attempt, nil
 }
 
-func GetQuizAttempt(studentID string, quizID string) (*model.QuizAttempt, error) {
+func GetQuizAttempt(ctx context.Context, studentID string, quizID string) (*model.QuizAttempt, error) {
 	var attempt model.QuizAttempt
-	err := database.DB.Preload("Answers").Where("student_id = ? AND quiz_id = ?", studentID, quizID).Order("completed_at desc").First(&attempt).Error
+	err := database.DB.WithContext(ctx).Preload("Answers").Where("student_id = ? AND quiz_id = ?", studentID, quizID).Order("completed_at desc").First(&attempt).Error
 	if err != nil {
 		return nil, err
 	}
@@ -187,13 +256,13 @@ func GetQuizAttempt(studentID string, quizID string) (*model.QuizAttempt, error)
 }
 
 // Assignments
-func GetAssignmentsByCourse(courseID string) ([]model.Assignment, error) {
+func GetAssignmentsByCourse(ctx context.Context, courseID string) ([]model.Assignment, error) {
 	var assignments []model.Assignment
-	err := database.DB.Where("course_id = ?", courseID).Find(&assignments).Error
+	err := database.DB.WithContext(ctx).Where("course_id = ?", courseID).Find(&assignments).Error
 	return assignments, err
 }
 
-func CreateAssignment(courseID string, req dto.CreateAssignmentRequest) (*model.Assignment, error) {
+func CreateAssignment(ctx context.Context, courseID string, req dto.CreateAssignmentRequest) (*model.Assignment, error) {
 	parsedCourseID, err := uuid.Parse(courseID)
 	if err != nil {
 		return nil, err
@@ -214,16 +283,17 @@ func CreateAssignment(courseID string, req dto.CreateAssignmentRequest) (*model.
 		IsPublished:  false,
 	}
 
-	if err := database.DB.Create(&assignment).Error; err != nil {
+	if err := database.DB.WithContext(ctx).Create(&assignment).Error; err != nil {
 		return nil, err
 	}
 
 	return &assignment, nil
 }
 
-func UpdateAssignment(id string, req dto.UpdateAssignmentRequest) (*model.Assignment, error) {
+func UpdateAssignment(ctx context.Context, id string, req dto.UpdateAssignmentRequest) (*model.Assignment, error) {
+	db := database.DB.WithContext(ctx)
 	var assignment model.Assignment
-	if err := database.DB.First(&assignment, "id = ?", id).Error; err != nil {
+	if err := db.First(&assignment, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 
@@ -246,30 +316,31 @@ func UpdateAssignment(id string, req dto.UpdateAssignmentRequest) (*model.Assign
 		updates["max_score"] = req.MaxScore
 	}
 
-	if err := database.DB.Model(&assignment).Updates(updates).Error; err != nil {
+	if err := db.Model(&assignment).Updates(updates).Error; err != nil {
 		return nil, err
 	}
 
 	return &assignment, nil
 }
 
-func DeleteAssignment(id string) error {
+func DeleteAssignment(ctx context.Context, id string) error {
+	db := database.DB.WithContext(ctx)
 	var assignment model.Assignment
-	if err := database.DB.First(&assignment, "id = ?", id).Error; err != nil {
+	if err := db.First(&assignment, "id = ?", id).Error; err != nil {
 		return err
 	}
 
-	return database.DB.Delete(&assignment).Error
+	return db.Delete(&assignment).Error
 }
 
 // Questions
-func GetQuestionsByQuiz(quizID string) ([]model.Question, error) {
+func GetQuestionsByQuiz(ctx context.Context, quizID string) ([]model.Question, error) {
 	var questions []model.Question
-	err := database.DB.Where("quiz_id = ?", quizID).Order(`"order" ASC`).Find(&questions).Error
+	err := database.DB.WithContext(ctx).Where("quiz_id = ?", quizID).Order(`"order" ASC`).Find(&questions).Error
 	return questions, err
 }
 
-func CreateQuestion(quizID string, req dto.CreateQuestionRequest) (*model.Question, error) {
+func CreateQuestion(ctx context.Context, quizID string, req dto.CreateQuestionRequest) (*model.Question, error) {
 	parsedQuizID, err := uuid.Parse(quizID)
 	if err != nil {
 		return nil, err
@@ -290,16 +361,17 @@ func CreateQuestion(quizID string, req dto.CreateQuestionRequest) (*model.Questi
 		Order:         req.Order,
 	}
 
-	if err := database.DB.Create(&question).Error; err != nil {
+	if err := database.DB.WithContext(ctx).Create(&question).Error; err != nil {
 		return nil, err
 	}
 
 	return &question, nil
 }
 
-func UpdateQuestion(id string, req dto.UpdateQuestionRequest) (*model.Question, error) {
+func UpdateQuestion(ctx context.Context, id string, req dto.UpdateQuestionRequest) (*model.Question, error) {
+	db := database.DB.WithContext(ctx)
 	var question model.Question
-	if err := database.DB.First(&question, "id = ?", id).Error; err != nil {
+	if err := db.First(&question, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 
@@ -322,18 +394,19 @@ func UpdateQuestion(id string, req dto.UpdateQuestionRequest) (*model.Question, 
 		question.Order = req.Order
 	}
 
-	if err := database.DB.Save(&question).Error; err != nil {
+	if err := db.Save(&question).Error; err != nil {
 		return nil, err
 	}
 
 	return &question, nil
 }
 
-func DeleteQuestion(id string) error {
+func DeleteQuestion(ctx context.Context, id string) error {
+	db := database.DB.WithContext(ctx)
 	var question model.Question
-	if err := database.DB.First(&question, "id = ?", id).Error; err != nil {
+	if err := db.First(&question, "id = ?", id).Error; err != nil {
 		return err
 	}
 
-	return database.DB.Unscoped().Delete(&question).Error
+	return db.Unscoped().Delete(&question).Error
 }
