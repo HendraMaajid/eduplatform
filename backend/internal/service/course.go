@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,17 +19,52 @@ import (
 // eliminates redundant DB calls from rapid page loads / React StrictMode.
 var AppCache = cache.New(10 * time.Second)
 
-func GetAllCourses(teacherID string) ([]model.Course, error) {
-	// Check cache first
-	cacheKey := fmt.Sprintf("courses:all:%s", teacherID)
+func GetAllCourses(teacherID string, page int, limit int, search string, category string, level string, status string) (*dto.PaginatedResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	// Cache key includes all filter parameters
+	cacheKey := fmt.Sprintf("courses:all:%s:p%d:l%d:s%s:c%s:lvl%s:st%s", teacherID, page, limit, search, category, level, status)
 	if cached, ok := AppCache.Get(cacheKey); ok {
-		return cached.([]model.Course), nil
+		return cached.(*dto.PaginatedResponse), nil
 	}
 
 	var courses []model.Course
+	var total int64
 
-	// Single query with subquery counts (2 round-trips instead of 5: this query + teacher preload)
-	query := database.DB.
+	// Base query
+	query := database.DB.Model(&model.Course{})
+
+	if teacherID != "" {
+		query = query.Where("teacher_id = ?", teacherID)
+	}
+	if search != "" {
+		query = query.Where("title ILIKE ?", "%"+search+"%")
+	}
+	if category != "" && category != "all" && category != "General" {
+		query = query.Where("category = ?", category)
+	} else if category == "General" {
+		query = query.Where("category IS NULL OR category = '' OR category = 'General'")
+	}
+	if level != "" && level != "all" {
+		query = query.Where("level = ?", level)
+	}
+	if status != "" && status != "all" {
+		query = query.Where("status = ?", status)
+	}
+
+	// Count total records for pagination
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	// Query data with subqueries for counts (2 round-trips instead of 5)
+	dataQuery := database.DB.
 		Select(`courses.*,
 			(SELECT count(*) FROM modules WHERE modules.course_id = courses.id AND modules.deleted_at IS NULL) as total_modules,
 			(SELECT count(*) FROM quizzes WHERE quizzes.course_id = courses.id AND quizzes.deleted_at IS NULL) as total_quizzes,
@@ -36,17 +72,44 @@ func GetAllCourses(teacherID string) ([]model.Course, error) {
 			(SELECT count(*) FROM enrollments WHERE enrollments.course_id = courses.id AND enrollments.deleted_at IS NULL) as enrolled_students`).
 		Preload("Teacher")
 
+	// Apply same filters to dataQuery
 	if teacherID != "" {
-		query = query.Where("courses.teacher_id = ?", teacherID)
+		dataQuery = dataQuery.Where("courses.teacher_id = ?", teacherID)
+	}
+	if search != "" {
+		dataQuery = dataQuery.Where("courses.title ILIKE ?", "%"+search+"%")
+	}
+	if category != "" && category != "all" && category != "General" {
+		dataQuery = dataQuery.Where("courses.category = ?", category)
+	} else if category == "General" {
+		dataQuery = dataQuery.Where("courses.category IS NULL OR courses.category = '' OR courses.category = 'General'")
+	}
+	if level != "" && level != "all" {
+		dataQuery = dataQuery.Where("courses.level = ?", level)
+	}
+	if status != "" && status != "all" {
+		dataQuery = dataQuery.Where("courses.status = ?", status)
 	}
 
-	err := query.Find(&courses).Error
+	err := dataQuery.Offset(offset).Limit(limit).Order("courses.created_at DESC").Find(&courses).Error
 	if err != nil {
 		return nil, err
 	}
 
-	AppCache.Set(cacheKey, courses)
-	return courses, nil
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	response := &dto.PaginatedResponse{
+		Data: courses,
+		Meta: dto.PaginationMeta{
+			Total:      total,
+			Page:       page,
+			Limit:      limit,
+			TotalPages: totalPages,
+		},
+	}
+
+	AppCache.Set(cacheKey, response)
+	return response, nil
 }
 
 func GetCourseByID(id string) (*model.Course, error) {
@@ -112,10 +175,17 @@ func CreateCourse(req dto.CreateCourseRequest, contextTeacherID string) (*model.
 	return &course, nil
 }
 
-func UpdateCourse(id string, req dto.CreateCourseRequest) (*model.Course, error) {
+func UpdateCourse(id string, req dto.CreateCourseRequest, requestingUserID string, requestingRole string) (*model.Course, error) {
 	var course model.Course
 	if err := database.DB.First(&course, "id = ?", id).Error; err != nil {
 		return nil, err
+	}
+
+	// Ownership check — only owner or admin can edit
+	if requestingRole != "super_admin" && requestingRole != "admin" {
+		if course.TeacherID.String() != requestingUserID {
+			return nil, errors.New("forbidden: you don't own this course")
+		}
 	}
 
 	updates := map[string]interface{}{}
@@ -159,10 +229,17 @@ func UpdateCourse(id string, req dto.CreateCourseRequest) (*model.Course, error)
 	return &course, nil
 }
 
-func DeleteCourse(id string) error {
+func DeleteCourse(id string, requestingUserID string, requestingRole string) error {
 	var course model.Course
 	if err := database.DB.First(&course, "id = ?", id).Error; err != nil {
 		return err
+	}
+
+	// Ownership check — only owner or admin can delete
+	if requestingRole != "super_admin" && requestingRole != "admin" {
+		if course.TeacherID.String() != requestingUserID {
+			return errors.New("forbidden: you don't own this course")
+		}
 	}
 
 	err := database.DB.Delete(&course).Error

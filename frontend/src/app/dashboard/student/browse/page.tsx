@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { BookOpen, Users, Star, Search, ShoppingCart, CheckCircle2, CreditCard, Loader2 } from "lucide-react";
+import { BookOpen, Users, Star, Search, ShoppingCart, CheckCircle2, CreditCard, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { stripHtml } from "@/lib/html-utils";
+import { useDebounce } from "@/hooks/use-debounce";
+import { PaginationMeta } from "@/lib/types";
 
 const levelLabels: Record<string, string> = { beginner: "Pemula", intermediate: "Menengah", advanced: "Lanjutan" };
 const levelColors: Record<string, string> = {
@@ -26,8 +28,12 @@ export default function StudentBrowsePage() {
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 500);
   const [category, setCategory] = useState("all");
   const [level, setLevel] = useState("all");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, page: 1, limit: 12, totalPages: 1 });
   
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
@@ -36,10 +42,25 @@ export default function StudentBrowsePage() {
   const [paying, setPaying] = useState(false);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, category, level]);
+
+  useEffect(() => {
     const fetchCourses = async () => {
+      setLoading(true);
       try {
-        const data = await api.get("/courses");
-        setCourses(data || []);
+        const query = new URLSearchParams({
+          page: currentPage.toString(),
+          limit: "12",
+          search: debouncedSearch,
+          category: category !== "all" ? category : "",
+          level: level !== "all" ? level : "",
+          status: "published"
+        }).toString();
+
+        const response = await api.get(`/courses?${query}`);
+        setCourses(response.data || []);
+        if (response.meta) setMeta(response.meta);
       } catch (error) {
         console.error("Gagal mengambil kursus", error);
         toast.error("Gagal mengambil daftar kursus");
@@ -48,17 +69,16 @@ export default function StudentBrowsePage() {
       }
     };
     fetchCourses();
-  }, []);
+  }, [currentPage, debouncedSearch, category, level]);
 
-  const categories = [...new Set(courses.map((c) => c.category || "General"))];
-  const publishedCourses = courses.filter((c) => c.status === "published");
-
-  const filteredCourses = publishedCourses.filter((course) => {
-    const matchSearch = course.title.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = category === "all" || course.category === category || (category === "General" && !course.category);
-    const matchLevel = level === "all" || course.level === level;
-    return matchSearch && matchCategory && matchLevel;
-  });
+  // Backend will only return published courses and apply search filters
+  // So filteredCourses is exactly what comes from the backend
+  const filteredCourses = courses;
+  
+  // We still need a list of categories. For now, since it's dynamic, we might 
+  // miss some if we don't fetch them separately. In a real app, categories come 
+  // from a separate /categories endpoint. We will hardcode common ones for filtering.
+  const categories = ["Technology", "Design", "Business", "Marketing", "Language", "General"];
 
   const handlePayment = async () => {
     if (!selectedCourse) return;
@@ -184,6 +204,36 @@ export default function StudentBrowsePage() {
           <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p className="text-lg font-medium">Tidak ada kursus ditemukan</p>
           <p className="text-sm">Coba ubah filter pencarian Anda atau periksa koneksi backend</p>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {meta.totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <p className="text-sm text-muted-foreground">
+            Menampilkan {(meta.page - 1) * meta.limit + 1} - {Math.min(meta.page * meta.limit, meta.total)} dari {meta.total} kursus
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="text-sm font-medium">
+              Halaman {currentPage} dari {meta.totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(meta.totalPages, prev + 1))}
+              disabled={currentPage === meta.totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 

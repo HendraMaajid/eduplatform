@@ -9,16 +9,45 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func GetAllUsers(roleFilter string) ([]model.User, error) {
+func GetAllUsers(roleFilter string, page int, limit int, search string) (*dto.PaginatedResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
 	var users []model.User
+	var total int64
+
 	query := database.DB.Model(&model.User{})
-	if roleFilter != "" {
+	if roleFilter != "" && roleFilter != "all" {
 		query = query.Where("role = ?", roleFilter)
 	}
-	if err := query.Find(&users).Error; err != nil {
+	if search != "" {
+		query = query.Where("name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
 		return nil, err
 	}
-	return users, nil
+
+	if err := query.Offset(offset).Limit(limit).Order("created_at DESC").Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	return &dto.PaginatedResponse{
+		Data: users,
+		Meta: dto.PaginationMeta{
+			Total:      total,
+			Page:       page,
+			Limit:      limit,
+			TotalPages: totalPages,
+		},
+	}, nil
 }
 
 func CreateUser(req dto.CreateUserRequest) (*model.User, error) {

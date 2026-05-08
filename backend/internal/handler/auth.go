@@ -23,7 +23,14 @@ func Register(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
-		"user":    user,
+		"user": dto.UserResponse{
+			ID:        user.ID.String(),
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			Avatar:    user.Avatar,
+			CreatedAt: user.CreatedAt,
+		},
 	})
 }
 
@@ -42,6 +49,13 @@ func Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.AuthResponse{
 		Token: token,
-		User:  user,
+		User: dto.UserResponse{
+			ID:        user.ID.String(),
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			Avatar:    user.Avatar,
+			CreatedAt: user.CreatedAt,
+		},
 	})
 }

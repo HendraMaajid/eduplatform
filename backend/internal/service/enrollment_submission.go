@@ -1,10 +1,11 @@
 package service
 
 import (
+	crypto_rand "crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"backend/internal/dto"
@@ -359,8 +360,12 @@ func GenerateCertificate(studentID string, courseID string) (*model.Certificate,
 		}
 	}
 
-	// All validations passed — generate certificate
-	certNumber := fmt.Sprintf("CERT-%s-%d", time.Now().Format("20060102"), rand.Intn(10000))
+	// All validations passed — generate certificate with cryptographically secure ID
+	randBytes := make([]byte, 6)
+	if _, err := crypto_rand.Read(randBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate certificate number: %w", err)
+	}
+	certNumber := fmt.Sprintf("CERT-%s-%s", time.Now().Format("20060102"), hex.EncodeToString(randBytes))
 
 	certificate := model.Certificate{
 		StudentID:         parsedStudentID,

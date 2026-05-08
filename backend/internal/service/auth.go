@@ -67,7 +67,7 @@ func LoginUser(req dto.LoginRequest) (string, *model.User, error) {
 }
 
 func GenerateJWT(user model.User) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour * 7) // 1 week
+	expirationTime := time.Now().Add(24 * time.Hour) // 24 hours (reduced from 7 days for security)
 	claims := &Claims{
 		UserID: user.ID.String(),
 		Role:   user.Role,
@@ -78,9 +78,6 @@ func GenerateJWT(user model.User) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "secret" // fallback
-	}
 
 	return token.SignedString([]byte(secret))
 }

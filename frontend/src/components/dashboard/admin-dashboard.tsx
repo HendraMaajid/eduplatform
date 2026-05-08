@@ -59,13 +59,13 @@ export function AdminDashboard() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [dashData, coursesData, enrollmentsData] = await Promise.all([
+        const [dashData, coursesRes, enrollmentsData] = await Promise.all([
           api.get("/dashboard/admin"),
-          api.get("/courses"),
+          api.get("/courses?limit=100"),
           api.get("/enrollments/recent").catch(() => []),
         ]);
         setStats(dashData || { totalStudents: 0, totalTeachers: 0, totalCourses: 0, totalRevenue: 0 });
-        setCourses(coursesData || []);
+        setCourses(coursesRes?.data || (Array.isArray(coursesRes) ? coursesRes : []));
         setRecentEnrollments(enrollmentsData || []);
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);

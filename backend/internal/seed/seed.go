@@ -3,6 +3,7 @@ package seed
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"backend/internal/model"
 	"backend/pkg/database"
@@ -11,6 +12,12 @@ import (
 )
 
 func SeedAll() {
+	// Safety guard: in production, only seed if explicitly enabled
+	if os.Getenv("GIN_MODE") == "release" && os.Getenv("FORCE_SEED") != "true" {
+		log.Println("Skipping seed in production mode (set FORCE_SEED=true to override)")
+		return
+	}
+
 	var count int64
 	database.DB.Model(&model.User{}).Count(&count)
 
@@ -21,7 +28,14 @@ func SeedAll() {
 
 	log.Println("Starting database seeding...")
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	// Use SEED_PASSWORD env var if set, otherwise fall back to default (dev only)
+	seedPassword := os.Getenv("SEED_PASSWORD")
+	if seedPassword == "" {
+		seedPassword = "password123"
+		log.Println("WARNING: Using default seed password. Set SEED_PASSWORD env var for production.")
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(seedPassword), bcrypt.DefaultCost)
 	passStr := string(hashedPassword)
 
 	// 1. Seed Users

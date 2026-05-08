@@ -72,9 +72,12 @@ export default function LandingPage() {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const data = await api.get("/courses");
-        if (data && Array.isArray(data)) {
-          setCourses(data);
+        const res = await api.get("/courses?limit=6");
+        if (res) {
+          const courseList = res.data || res;
+          if (Array.isArray(courseList)) {
+            setCourses(courseList);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch courses:", error);

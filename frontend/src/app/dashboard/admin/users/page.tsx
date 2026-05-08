@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Search, MoreHorizontal, Pencil, Trash2, UserPlus, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { useDebounce } from "@/hooks/use-debounce";
+import { PaginationMeta } from "@/lib/types";
 
 const roleConfig: Record<string, { label: string; className: string }> = {
   super_admin: { label: "Super Admin", className: "bg-red-500/10 text-red-500 border-red-500/20" },
@@ -22,14 +24,16 @@ const roleConfig: Record<string, { label: string; className: string }> = {
   student: { label: "Siswa", className: "bg-green-500/10 text-green-500 border-green-500/20" },
 };
 
-const ITEMS_PER_PAGE = 10;
-
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 500);
   const [roleFilter, setRoleFilter] = useState("all");
+  
   const [currentPage, setCurrentPage] = useState(1);
+  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, page: 1, limit: 10, totalPages: 1 });
 
   // Create dialog
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -41,13 +45,26 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", role: "" });
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, roleFilter]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [currentPage, debouncedSearch, roleFilter]);
 
   const fetchUsers = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const data = await api.get("/users");
-      setUsers(data || []);
+      
+      const query = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: "10",
+        search: debouncedSearch,
+        role: roleFilter !== "all" ? roleFilter : ""
+      }).toString();
+
+      const response = await api.get(`/users?${query}`);
+      setUsers(response.data || []);
+      if (response.meta) setMeta(response.meta);
     } catch (error) {
       if (!silent) toast.error("Gagal mengambil data pengguna");
     } finally {
@@ -105,18 +122,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const filteredUsers = users.filter((user) => {
-    const matchSearch = user.name.toLowerCase().includes(search.toLowerCase()) || user.email.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === "all" || user.role === roleFilter;
-    return matchSearch && matchRole;
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  // Reset page when filter changes
-  useEffect(() => { setCurrentPage(1); }, [search, roleFilter]);
+  const paginatedUsers = users;
 
   return (
     <div className="space-y-6">
@@ -225,21 +231,21 @@ export default function AdminUsersPage() {
               </Table>
 
               {/* Pagination */}
-              {totalPages > 1 && (
+              {meta.totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <p className="text-sm text-muted-foreground">
-                    Menampilkan {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)} dari {filteredUsers.length} pengguna
+                    Menampilkan {(meta.page - 1) * meta.limit + 1}–{Math.min(meta.page * meta.limit, meta.total)} dari {meta.total} pengguna
                   </p>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map(page => (
                       <Button key={page} variant={currentPage === page ? "default" : "outline"} size="icon" className="h-8 w-8" onClick={() => setCurrentPage(page)}>
                         {page}
                       </Button>
                     ))}
-                    <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                    <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === meta.totalPages} onClick={() => setCurrentPage(p => p + 1)}>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>

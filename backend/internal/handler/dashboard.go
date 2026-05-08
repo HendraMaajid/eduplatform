@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,7 +11,8 @@ import (
 func GetAdminDashboard(c *gin.Context) {
 	stats, err := service.GetAdminStats()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetAdminDashboard error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load dashboard"})
 		return
 	}
 	c.JSON(http.StatusOK, stats)
@@ -21,7 +23,8 @@ func GetTeacherDashboard(c *gin.Context) {
 
 	stats, err := service.GetTeacherStats(teacherID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetTeacherDashboard error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load dashboard"})
 		return
 	}
 	c.JSON(http.StatusOK, stats)
@@ -32,7 +35,8 @@ func GetStudentDashboard(c *gin.Context) {
 
 	stats, err := service.GetStudentStats(studentID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetStudentDashboard error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load dashboard"})
 		return
 	}
 	c.JSON(http.StatusOK, stats)

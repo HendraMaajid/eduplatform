@@ -5,6 +5,18 @@ export type EnrollmentStatus = "active" | "completed" | "certified";
 export type SubmissionStatus = "submitted" | "graded" | "passed" | "failed";
 export type QuestionType = "multiple_choice" | "short_answer";
 
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T;
+  meta: PaginationMeta;
+}
+
 export interface User {
   id: string;
   name: string;

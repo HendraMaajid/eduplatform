@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,8 @@ func GetNotifications(c *gin.Context) {
 
 	notifications, err := service.GetNotifications(userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetNotifications error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load notifications"})
 		return
 	}
 
@@ -25,7 +27,8 @@ func MarkNotificationAsRead(c *gin.Context) {
 
 	err := service.MarkNotificationAsRead(notificationID, userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("MarkNotificationAsRead error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update notification"})
 		return
 	}
 
@@ -37,7 +40,8 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 
 	err := service.MarkAllNotificationsAsRead(userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("MarkAllNotificationsAsRead error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update notifications"})
 		return
 	}
 

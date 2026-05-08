@@ -11,19 +11,62 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UploadFile handles multipart file uploads
+// allowedExtensions is the set of permitted file extensions for upload.
+var allowedExtensions = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true,
+}
+
+// allowedMIMETypes is the set of permitted MIME types based on file content inspection.
+var allowedMIMETypes = map[string]bool{
+	"image/jpeg": true, "image/png": true, "image/webp": true, "image/gif": true,
+}
+
+// maxUploadSize is the maximum allowed upload file size (5MB).
+const maxUploadSize = 5 << 20 // 5MB
+
+// UploadFile handles multipart file uploads with security validation.
 func UploadFile(c *gin.Context) {
+	// Limit request body size to prevent memory exhaustion
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
+
 	// Retrieve the file from the form data
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided or file too large (max 5MB)"})
+		return
+	}
+
+	// Validate file size
+	if file.Size > maxUploadSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File too large (max 5MB)"})
 		return
 	}
 
 	// Validate file extension
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
+	if !allowedExtensions[ext] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Only JPG, PNG, WEBP, and GIF are allowed"})
+		return
+	}
+
+	// Validate actual file content (magic bytes) — prevents extension spoofing
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
+		return
+	}
+	defer src.Close()
+
+	buf := make([]byte, 512)
+	n, err := src.Read(buf)
+	if err != nil || n == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read file content"})
+		return
+	}
+
+	contentType := http.DetectContentType(buf[:n])
+	if !allowedMIMETypes[contentType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file content. File does not appear to be a valid image"})
 		return
 	}
 
@@ -34,7 +77,7 @@ func UploadFile(c *gin.Context) {
 		return
 	}
 
-	// Generate a unique filename to prevent overwriting
+	// Generate a unique filename to prevent overwriting (no user-supplied filename used)
 	fileName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
 	filePath := filepath.Join(uploadDir, fileName)
 
@@ -45,11 +88,10 @@ func UploadFile(c *gin.Context) {
 	}
 
 	// Return the accessible URL for the file
-	// Note: We will configure Gin to serve static files from /uploads
 	fileURL := fmt.Sprintf("/uploads/%s", fileName)
 
 	c.JSON(http.StatusOK, gin.H{
-		"url": fileURL,
+		"url":     fileURL,
 		"message": "File uploaded successfully",
 	})
 }

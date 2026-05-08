@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +22,13 @@ func EnrollCourse(c *gin.Context) {
 
 	enrollment, err := service.EnrollCourse(studentID.(string), courseID, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Return user-facing messages for expected errors
+		if err.Error() == "student already enrolled in this course" {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		log.Printf("EnrollCourse error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enroll in course"})
 		return
 	}
 
@@ -33,7 +40,8 @@ func GetMyEnrollments(c *gin.Context) {
 	
 	enrollments, err := service.GetMyEnrollments(studentID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetMyEnrollments error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load enrollments"})
 		return
 	}
 	
@@ -43,7 +51,8 @@ func GetMyEnrollments(c *gin.Context) {
 func GetRecentEnrollments(c *gin.Context) {
 	enrollments, err := service.GetRecentEnrollments(10)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetRecentEnrollments error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load enrollments"})
 		return
 	}
 	c.JSON(http.StatusOK, enrollments)
@@ -53,7 +62,8 @@ func GetCourseEnrollments(c *gin.Context) {
 	courseID := c.Param("id")
 	enrollments, err := service.GetCourseEnrollments(courseID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetCourseEnrollments error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load enrollments"})
 		return
 	}
 	c.JSON(http.StatusOK, enrollments)
@@ -66,7 +76,8 @@ func CompleteModule(c *gin.Context) {
 
 	enrollment, err := service.CompleteModule(studentID.(string), courseID, moduleID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("CompleteModule error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete module"})
 		return
 	}
 
@@ -86,7 +97,8 @@ func SubmitAssignment(c *gin.Context) {
 
 	submission, err := service.SubmitAssignment(studentID.(string), assignmentID, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("SubmitAssignment error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit assignment"})
 		return
 	}
 
@@ -104,7 +116,8 @@ func GradeSubmission(c *gin.Context) {
 
 	submission, err := service.GradeSubmission(submissionID, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GradeSubmission error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grade submission"})
 		return
 	}
 
@@ -116,7 +129,8 @@ func GetMySubmissions(c *gin.Context) {
 	
 	submissions, err := service.GetMySubmissions(studentID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetMySubmissions error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submissions"})
 		return
 	}
 	
@@ -128,7 +142,8 @@ func GetTeacherSubmissions(c *gin.Context) {
 	
 	submissions, err := service.GetTeacherSubmissions(teacherID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetTeacherSubmissions error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submissions"})
 		return
 	}
 	
@@ -142,7 +157,8 @@ func GenerateCertificate(c *gin.Context) {
 
 	certificate, err := service.GenerateCertificate(studentID.(string), courseID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// User-facing validation errors are fine to expose
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -154,7 +170,8 @@ func GetMyCertificates(c *gin.Context) {
 	
 	certificates, err := service.GetMyCertificates(studentID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetMyCertificates error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load certificates"})
 		return
 	}
 	

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"backend/internal/dto"
@@ -119,15 +120,53 @@ func DeleteAssignment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "assignment deleted successfully"})
 }
 
-// Questions
+// Questions — Full view (teachers only, includes correctAnswer)
 func GetQuestions(c *gin.Context) {
 	quizID := c.Param("id")
 	questions, err := service.GetQuestionsByQuiz(c.Request.Context(), quizID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("GetQuestions error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load questions"})
 		return
 	}
 	c.JSON(http.StatusOK, questions)
+}
+
+// GetQuestionsForStudent returns questions without correctAnswer (safe for students)
+func GetQuestionsForStudent(c *gin.Context) {
+	quizID := c.Param("id")
+	questions, err := service.GetQuestionsByQuiz(c.Request.Context(), quizID)
+	if err != nil {
+		log.Printf("GetQuestionsForStudent error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load questions"})
+		return
+	}
+
+	// Strip correct answers before sending to client
+	type SafeQuestion struct {
+		ID      string   `json:"id"`
+		QuizID  string   `json:"quizId"`
+		Type    string   `json:"type"`
+		Text    string   `json:"text"`
+		Options []string `json:"options,omitempty"`
+		Points  int      `json:"points"`
+		Order   int      `json:"order"`
+	}
+
+	safeQuestions := make([]SafeQuestion, len(questions))
+	for i, q := range questions {
+		safeQuestions[i] = SafeQuestion{
+			ID:      q.ID.String(),
+			QuizID:  q.QuizID.String(),
+			Type:    q.Type,
+			Text:    q.Text,
+			Options: q.Options,
+			Points:  q.Points,
+			Order:   q.Order,
+		}
+	}
+
+	c.JSON(http.StatusOK, safeQuestions)
 }
 
 func CreateQuestion(c *gin.Context) {

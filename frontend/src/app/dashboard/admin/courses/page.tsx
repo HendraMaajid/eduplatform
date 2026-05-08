@@ -14,6 +14,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Users, BookOpen, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { useDebounce } from "@/hooks/use-debounce";
+import { PaginationMeta } from "@/lib/types";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   published: { label: "Aktif", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
@@ -32,20 +34,34 @@ export default function AdminCoursesPage() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 500);
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, page: 1, limit: 10, totalPages: 1 });
+
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, statusFilter, categoryFilter]);
 
   useEffect(() => {
     fetchCourses();
-  }, []);
+  }, [currentPage, debouncedSearch, statusFilter, categoryFilter]);
 
   const fetchCourses = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const data = await api.get("/courses");
-      setCourses(data || []);
+      
+      const query = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: "10",
+        search: debouncedSearch,
+        category: categoryFilter !== "all" ? categoryFilter : "",
+        status: statusFilter !== "all" ? statusFilter : ""
+      }).toString();
+
+      const response = await api.get(`/courses?${query}`);
+      setCourses(response.data || []);
+      if (response.meta) setMeta(response.meta);
     } catch (error) {
       if (!silent) toast.error("Gagal mengambil data kursus");
     } finally {
@@ -64,21 +80,8 @@ export default function AdminCoursesPage() {
     }
   };
 
-  const categories = [...new Set(courses.map((c) => c.category || "General"))];
-
-  const filteredCourses = courses.filter((course) => {
-    const matchSearch =
-      course.title.toLowerCase().includes(search.toLowerCase()) ||
-      course.teacher?.name?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || course.status === statusFilter;
-    const matchCategory = categoryFilter === "all" || course.category === categoryFilter || (categoryFilter === "General" && !course.category);
-    return matchSearch && matchStatus && matchCategory;
-  });
-
-  const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
-  const paginatedCourses = filteredCourses.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter]);
+  const categories = ["Technology", "Design", "Business", "Marketing", "Language", "General"];
+  const paginatedCourses = courses;
 
   return (
     <div className="space-y-6">
@@ -163,7 +166,7 @@ export default function AdminCoursesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCourses.length === 0 ? (
+                {paginatedCourses.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -247,21 +250,21 @@ export default function AdminCoursesPage() {
                 )}
               </TableBody>
             </Table>
-            {totalPages > 1 && (
+            {meta.totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t">
                 <p className="text-sm text-muted-foreground">
-                  Menampilkan {((currentPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredCourses.length)} dari {filteredCourses.length} kursus
+                  Menampilkan {(meta.page - 1) * meta.limit + 1}–{Math.min(meta.page * meta.limit, meta.total)} dari {meta.total} kursus
                 </p>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map(page => (
                     <Button key={page} variant={currentPage === page ? "default" : "outline"} size="icon" className="h-8 w-8" onClick={() => setCurrentPage(page)}>
                       {page}
                     </Button>
                   ))}
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === meta.totalPages} onClick={() => setCurrentPage(p => p + 1)}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

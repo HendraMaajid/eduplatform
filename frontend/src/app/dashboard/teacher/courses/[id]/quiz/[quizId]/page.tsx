@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { RichContent } from "@/lib/html-utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,7 @@ export default function QuizQuestionsPage() {
       if (!silent) setLoading(true);
       const [quizData, questionsData] = await Promise.all([
         api.get(`/courses/${courseId}/quizzes`),
-        api.get(`/quizzes/${quizId}/questions`),
+        api.get(`/quizzes/${quizId}/questions/full`),
       ]);
 
       const currentQuiz = Array.isArray(quizData)
@@ -269,9 +270,9 @@ export default function QuizQuestionsPage() {
                     </Badge>
                   </div>
 
-                  <div
-                    className="text-sm mb-3 prose prose-sm dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: q.text }}
+                  <RichContent
+                    html={q.text}
+                    className="text-sm mb-3"
                   />
 
                   {/* Options display */}

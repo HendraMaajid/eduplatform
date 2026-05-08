@@ -34,6 +34,7 @@ func main() {
 	database.InitDB()
 
 	// Seed dummy data (skips if data already exists)
+	// ⚠️ In production, set SKIP_SEED=true to disable seeding
 	if os.Getenv("SKIP_SEED") != "true" {
 		seed.SeedAll()
 		seed.SeedAdminIfMissing()
@@ -51,8 +52,15 @@ func main() {
 	// Initialize Gin router
 	r := gin.Default()
 
-	// Middleware
+	// ── Global Middleware ──────────────────────────────────────────────
 	r.Use(middleware.CORS())
+	r.Use(middleware.SecurityHeaders())
+
+	// Global request body size limit (10MB) to prevent memory exhaustion
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10<<20)
+		c.Next()
+	})
 
 	// Basic health check endpoint
 	r.GET("/api/health", func(c *gin.Context) {
@@ -70,11 +78,12 @@ func main() {
 	{
 		auth := api.Group("/auth")
 		{
-			auth.POST("/register", handler.Register)
-			auth.POST("/login", handler.Login)
+			// Rate-limited auth endpoints to prevent brute-force
+			auth.POST("/register", middleware.RateLimit("3-M"), handler.Register)
+			auth.POST("/login", middleware.RateLimit("10-M"), handler.Login)
 		}
 
-		// Public courses
+		// Public courses (read-only, no sensitive data)
 		api.GET("/courses", handler.GetCourses)
 		api.GET("/courses/:id", handler.GetCourseByID)
 		api.GET("/courses/:id/modules", handler.GetModules)
@@ -105,6 +114,12 @@ func main() {
 			protected.POST("/quizzes/:id/submit", handler.SubmitQuiz)
 			protected.GET("/quizzes/:id/attempt", handler.GetQuizAttempt)
 
+			// Quizzes, Assignments, Questions — moved from public to protected
+			// Students need to be authenticated to view these
+			protected.GET("/courses/:id/quizzes", handler.GetQuizzes)
+			protected.GET("/courses/:id/assignments", handler.GetAssignments)
+			protected.GET("/quizzes/:id/questions", handler.GetQuestionsForStudent)
+
 			// Admin/Teacher Routes
 			teacherOnly := protected.Group("/")
 			teacherOnly.Use(middleware.RequireRole("super_admin", "admin", "teacher"))
@@ -127,6 +142,8 @@ func main() {
 				teacherOnly.POST("/quizzes/:id/questions", handler.CreateQuestion)
 				teacherOnly.PUT("/questions/:id", handler.UpdateQuestion)
 				teacherOnly.DELETE("/questions/:id", handler.DeleteQuestion)
+				// Teachers can see full questions with correct answers
+				teacherOnly.GET("/quizzes/:id/questions/full", handler.GetQuestions)
 			}
 
 			adminOnly := protected.Group("/")
@@ -143,11 +160,6 @@ func main() {
 				adminOnly.DELETE("/courses/:id", handler.DeleteCourse)
 			}
 		}
-
-		// Public courses (continued)
-		api.GET("/courses/:id/quizzes", handler.GetQuizzes)
-		api.GET("/courses/:id/assignments", handler.GetAssignments)
-		api.GET("/quizzes/:id/questions", handler.GetQuestions)
 	}
 
 	// Setup port
