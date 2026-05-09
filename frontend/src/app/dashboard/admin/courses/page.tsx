@@ -16,6 +16,7 @@ import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Users, BookOpen, Loa
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { PaginationMeta } from "@/lib/types";
+import { PaginationControl } from "@/components/ui/pagination-control";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   published: { label: "Aktif", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
@@ -255,19 +256,11 @@ export default function AdminCoursesPage() {
                 <p className="text-sm text-muted-foreground">
                   Menampilkan {(meta.page - 1) * meta.limit + 1}–{Math.min(meta.page * meta.limit, meta.total)} dari {meta.total} kursus
                 </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map(page => (
-                    <Button key={page} variant={currentPage === page ? "default" : "outline"} size="icon" className="h-8 w-8" onClick={() => setCurrentPage(page)}>
-                      {page}
-                    </Button>
-                  ))}
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage === meta.totalPages} onClick={() => setCurrentPage(p => p + 1)}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                <PaginationControl 
+                  currentPage={currentPage} 
+                  totalPages={meta.totalPages} 
+                  onPageChange={setCurrentPage} 
+                />
               </div>
             )}
             </div>)}

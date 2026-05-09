@@ -120,6 +120,9 @@ func main() {
 			protected.GET("/courses/:id/assignments", handler.GetAssignments)
 			protected.GET("/quizzes/:id/questions", handler.GetQuestionsForStudent)
 
+			// AI Chat (RAG-based study companion)
+			protected.POST("/chat", middleware.RateLimit("20-M"), handler.HandleChat)
+
 			// Admin/Teacher Routes
 			teacherOnly := protected.Group("/")
 			teacherOnly.Use(middleware.RequireRole("super_admin", "admin", "teacher"))

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { BookOpen, Users, FileText, Plus, ArrowRight, Star, Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { PaginationMeta } from "@/lib/types";
+import { PaginationControl } from "@/components/ui/pagination-control";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   published: { label: "Aktif", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
@@ -149,27 +150,11 @@ export default function TeacherCoursesPage() {
               <p className="text-sm text-muted-foreground">
                 Menampilkan {(meta.page - 1) * meta.limit + 1} - {Math.min(meta.page * meta.limit, meta.total)} dari {meta.total} kursus
               </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="text-sm font-medium">
-                  Halaman {currentPage} dari {meta.totalPages}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(meta.totalPages, prev + 1))}
-                  disabled={currentPage === meta.totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              <PaginationControl 
+                currentPage={currentPage} 
+                totalPages={meta.totalPages} 
+                onPageChange={setCurrentPage} 
+              />
             </div>
           )}
         </div>

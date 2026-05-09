@@ -39,7 +39,8 @@ export default function CreateCoursePage() {
   useEffect(() => {
     const fetchTeachers = async () => {
       try {
-        let data = await api.get("/users?role=teacher") || [];
+        const rawData = await api.get("/users?role=teacher");
+        let data = Array.isArray(rawData) ? rawData : (rawData?.data || []);
         
         // Add current user if not in the list (e.g. Super Admin)
         if (session?.user && !data.some((t: any) => t.id === (session.user as any).id)) {

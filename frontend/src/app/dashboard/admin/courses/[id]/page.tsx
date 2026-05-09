@@ -48,7 +48,7 @@ export default function EditCoursePage() {
           api.get("/users?role=teacher")
         ]);
         
-        let allTeachers = teachersData || [];
+        let allTeachers = Array.isArray(teachersData) ? teachersData : (teachersData?.data || []);
         
         if (courseRes) {
           // If the course has a teacher and that teacher is not in the list, append it

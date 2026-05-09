@@ -53,6 +53,12 @@ func InitDB() {
 
 	// Auto Migrate — only run in development or when explicitly enabled
 	if os.Getenv("SKIP_MIGRATION") != "true" {
+		// Enable pgvector extension for AI RAG feature
+		if execErr := DB.Exec("CREATE EXTENSION IF NOT EXISTS vector").Error; execErr != nil {
+			log.Printf("Warning: could not enable pgvector extension: %v", execErr)
+			log.Println("AI Chat RAG vector search will fall back to keyword search")
+		}
+
 		err = DB.AutoMigrate(
 			&model.User{},
 			&model.Course{},
@@ -68,6 +74,7 @@ func InitDB() {
 			&model.Payment{},
 			&model.Certificate{},
 			&model.Notification{},
+			&model.ModuleEmbedding{},
 		)
 
 		if err != nil {

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { stripHtml, RichContent } from "@/lib/html-utils";
+import AIChatWidget from "@/components/dashboard/AIChatWidget";
 
 export default function StudentCourseDetailPage() {
   const params = useParams();
@@ -417,6 +418,9 @@ export default function StudentCourseDetailPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* AI Chat Floating Widget */}
+      <AIChatWidget courseId={courseId} courseTitle={course.title} />
     </div>
   );
 }

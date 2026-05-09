@@ -44,8 +44,13 @@ export function TeacherDashboard() {
           api.get("/submissions/teacher")
         ]);
         setStats(statsData);
-        setCourses(coursesData.slice(0, 3)); // Only show top 3
-        setPendingSubmissions(submissionsData.filter((s: any) => s.status === "submitted").slice(0, 5));
+        
+        // Handle both array and paginated response { data: [...] }
+        const coursesList = Array.isArray(coursesData) ? coursesData : (coursesData?.data || []);
+        setCourses(coursesList.slice(0, 3)); // Only show top 3
+
+        const submissionsList = Array.isArray(submissionsData) ? submissionsData : (submissionsData?.data || []);
+        setPendingSubmissions(submissionsList.filter((s: any) => s.status === "submitted").slice(0, 5));
       } catch (error) {
         console.error("Failed to fetch teacher dashboard data", error);
       } finally {
