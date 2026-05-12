@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"os"
 	"time"
@@ -19,24 +21,21 @@ type Claims struct {
 }
 
 func RegisterUser(req dto.RegisterRequest) (*model.User, error) {
-	// Check if email exists
 	var existingUser model.User
 	if err := database.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
 		return nil, errors.New("email already registered")
 	}
 
-	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create user
 	user := model.User{
 		Name:         req.Name,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
-		Role:         "student", // Default role
+		Role:         "student",
 	}
 
 	if err := database.DB.Create(&user).Error; err != nil {
@@ -46,28 +45,31 @@ func RegisterUser(req dto.RegisterRequest) (*model.User, error) {
 	return &user, nil
 }
 
-func LoginUser(req dto.LoginRequest) (string, *model.User, error) {
+func LoginUser(req dto.LoginRequest) (string, string, *model.User, error) {
 	var user model.User
 	if err := database.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		return "", nil, errors.New("invalid email or password")
+		return "", "", nil, errors.New("invalid email or password")
 	}
 
-	// Compare password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return "", nil, errors.New("invalid email or password")
+		return "", "", nil, errors.New("invalid email or password")
 	}
 
-	// Generate JWT
-	token, err := GenerateJWT(user)
+	accessToken, err := GenerateAccessToken(user)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
-	return token, &user, nil
+	refreshToken, err := GenerateRefreshToken(user)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	return accessToken, refreshToken, &user, nil
 }
 
-func GenerateJWT(user model.User) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour) // 24 hours (reduced from 7 days for security)
+func GenerateAccessToken(user model.User) (string, error) {
+	expirationTime := time.Now().Add(15 * time.Minute)
 	claims := &Claims{
 		UserID: user.ID.String(),
 		Role:   user.Role,
@@ -77,7 +79,65 @@ func GenerateJWT(user model.User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret := os.Getenv("JWT_SECRET")
+	return token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+}
 
-	return token.SignedString([]byte(secret))
+func GenerateRefreshToken(user model.User) (string, error) {
+	// Generate random token
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(bytes)
+
+	// Delete old refresh tokens for this user (max 5 sessions)
+	database.DB.Where("user_id = ? AND expires_at < ?", user.ID, time.Now()).Delete(&model.RefreshToken{})
+
+	// Save to DB
+	rt := model.RefreshToken{
+		UserID:    user.ID,
+		Token:     token,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour), // 7 days
+	}
+	if err := database.DB.Create(&rt).Error; err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+func RefreshAccessToken(refreshTokenStr string) (string, string, *model.User, error) {
+	var rt model.RefreshToken
+	if err := database.DB.Where("token = ? AND expires_at > ?", refreshTokenStr, time.Now()).First(&rt).Error; err != nil {
+		return "", "", nil, errors.New("invalid or expired refresh token")
+	}
+
+	var user model.User
+	if err := database.DB.First(&user, "id = ?", rt.UserID).Error; err != nil {
+		return "", "", nil, errors.New("user not found")
+	}
+
+	// Rotate refresh token (delete old, create new)
+	database.DB.Delete(&rt)
+
+	accessToken, err := GenerateAccessToken(user)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	newRefreshToken, err := GenerateRefreshToken(user)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	return accessToken, newRefreshToken, &user, nil
+}
+
+func RevokeRefreshToken(refreshTokenStr string) error {
+	return database.DB.Where("token = ?", refreshTokenStr).Delete(&model.RefreshToken{}).Error
+}
+
+// GenerateJWT is kept for backward compatibility
+func GenerateJWT(user model.User) (string, error) {
+	return GenerateAccessToken(user)
 }

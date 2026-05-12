@@ -81,6 +81,7 @@ func main() {
 			// Rate-limited auth endpoints to prevent brute-force
 			auth.POST("/register", middleware.RateLimit("3-M"), handler.Register)
 			auth.POST("/login", middleware.RateLimit("10-M"), handler.Login)
+			auth.POST("/refresh", middleware.RateLimit("30-M"), handler.RefreshToken)
 		}
 
 		// Public courses (read-only, no sensitive data)

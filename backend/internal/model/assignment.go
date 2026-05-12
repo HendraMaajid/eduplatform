@@ -26,9 +26,9 @@ type Assignment struct {
 
 type Submission struct {
 	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	AssignmentID uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_submission_student_assignment" json:"assignmentId"`
+	AssignmentID uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_submission_student_assignment,unique" json:"assignmentId"`
 	Assignment   *Assignment    `gorm:"foreignKey:AssignmentID" json:"assignment,omitempty"`
-	StudentID    uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_submission_student_assignment" json:"studentId"`
+	StudentID    uuid.UUID      `gorm:"type:uuid;not null;index;index:idx_submission_student_assignment,unique" json:"studentId"`
 	Student      *User          `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 	FileURL      string         `gorm:"size:500" json:"fileUrl"`
 	FileName     string         `gorm:"size:255" json:"fileName"`

@@ -1,116 +1,125 @@
+// Package seed provides comprehensive database seeding for the EduCourse platform.
+//
+// Demo accounts (all password "password123" unless SEED_PASSWORD set):
+//
+//	admin@eduplatform.com              - super_admin
+//	admin@admin.com                    - admin
+//	budi@teacher.com                   - teacher
+//	teacher01@educourse.com … teacher11@educourse.com - teacher
+//	student@example.com                - student
+//	student01@educourse.com … student54@educourse.com - student
 package seed
 
 import (
 	"fmt"
 	"log"
+	mrand "math/rand"
 	"os"
+	"time"
 
 	"backend/internal/model"
 	"backend/pkg/database"
+
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm/clause"
 )
 
+// ─── Config & Context ─────────────────────────────────────────────────────────
+
+type seedConfig struct {
+	TeacherCount int
+	StudentCount int
+	CourseCount  int
+	PasswordHash string
+	RNG          *mrand.Rand
+}
+
+type seededUsers struct {
+	SuperAdmin model.User
+	Admin      model.User
+	Teachers   []model.User
+	Students   []model.User
+}
+
+type seededCourses struct {
+	Courses         []model.Course
+	Modules         []model.Module
+	ModulesByCourse map[uuid.UUID][]model.Module
+}
+
+type seededLearning struct {
+	Quizzes             []model.Quiz
+	Questions           []model.Question
+	Assignments         []model.Assignment
+	QuizzesByCourse     map[uuid.UUID][]model.Quiz
+	QuestionsByQuiz     map[uuid.UUID][]model.Question
+	AssignmentsByCourse map[uuid.UUID][]model.Assignment
+}
+
+type seededEnrollments struct {
+	Enrollments  []model.Enrollment
+	Certificates []model.Certificate
+	CountByState map[string]int
+}
+
+type seedContext struct {
+	Cfg         seedConfig
+	Users       *seededUsers
+	Courses     *seededCourses
+	Learning    *seededLearning
+	Enrollments *seededEnrollments
+}
+
+// ─── Main Orchestrator ────────────────────────────────────────────────────────
+
 func SeedAll() {
-	// Safety guard: in production, only seed if explicitly enabled
 	if os.Getenv("GIN_MODE") == "release" && os.Getenv("FORCE_SEED") != "true" {
 		log.Println("Skipping seed in production mode (set FORCE_SEED=true to override)")
 		return
 	}
 
-	var count int64
-	database.DB.Model(&model.User{}).Count(&count)
+	start := time.Now()
+	log.Println("[seed] Running database seeder (duplicates will be skipped)...")
 
-	if count > 0 {
-		log.Println("Database already seeded, skipping...")
-		return
-	}
-
-	log.Println("Starting database seeding...")
-
-	// Use SEED_PASSWORD env var if set, otherwise fall back to default (dev only)
 	seedPassword := os.Getenv("SEED_PASSWORD")
 	if seedPassword == "" {
 		seedPassword = "password123"
-		log.Println("WARNING: Using default seed password. Set SEED_PASSWORD env var for production.")
 	}
-
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(seedPassword), bcrypt.DefaultCost)
-	passStr := string(hashedPassword)
 
-	// 1. Seed Users
-	superAdmin := model.User{
-		Name:         "Super Admin",
-		Email:        "admin@eduplatform.com",
-		PasswordHash: passStr,
-		Role:         "super_admin",
-	}
-	teacher := model.User{
-		Name:         "Budi Santoso",
-		Email:        "budi@teacher.com",
-		PasswordHash: passStr,
-		Role:         "teacher",
-	}
-	student := model.User{
-		Name:         "John Doe",
-		Email:        "student@example.com",
-		PasswordHash: passStr,
-		Role:         "student",
+	ctx := &seedContext{
+		Cfg: seedConfig{
+			TeacherCount: 12,
+			StudentCount: 55,
+			CourseCount:  15,
+			PasswordHash: string(hashedPassword),
+			RNG:          newSeededRand(),
+		},
 	}
 
-	admin := model.User{
-		Name:         "Admin EduPlatform",
-		Email:        "admin@admin.com",
-		PasswordHash: passStr,
-		Role:         "admin",
+	steps := []struct {
+		name string
+		fn   func(*seedContext) error
+	}{
+		{"users", seedUsers},
+		{"courses", seedCourses},
+		{"learning", seedLearning},
+		{"enrollments", seedEnrollments},
+		{"notifications", seedNotifications},
 	}
 
-	database.DB.Create(&superAdmin)
-	database.DB.Create(&admin)
-	database.DB.Create(&teacher)
-	database.DB.Create(&student)
-
-	// 2. Seed Course
-	course := model.Course{
-		Title:            "Fullstack Web Developer dengan Go & Next.js",
-		Slug:             "fullstack-go-nextjs",
-		Description:      "Pelajari cara membangun aplikasi web modern menggunakan Golang untuk backend dan Next.js untuk frontend.",
-		ShortDescription: "Membangun web modern dari nol.",
-		Price:            1500000,
-		Category:         "Pemrograman",
-		Level:            "intermediate",
-		Status:           "published",
-		TeacherID:        teacher.ID,
-		Duration:         "12 Minggu",
+	for _, step := range steps {
+		if err := step.fn(ctx); err != nil {
+			log.Fatalf("[seed] FAILED at %s: %v", step.name, err)
+		}
 	}
-	database.DB.Create(&course)
 
-	// 3. Seed Modules
-	mod1 := model.Module{
-		CourseID:    course.ID,
-		Title:       "Pengenalan Golang",
-		Description: "Dasar-dasar bahasa pemrograman Go.",
-		Content:     "Go adalah bahasa pemrograman yang dibuat oleh Google...",
-		Order:       1,
-		Duration:    "2 Jam",
-		IsPublished: true,
-	}
-	mod2 := model.Module{
-		CourseID:    course.ID,
-		Title:       "Membuat REST API",
-		Description: "Cara membuat REST API menggunakan framework Gin.",
-		Content:     "Gin adalah framework web HTTP yang ditulis dalam bahasa Go...",
-		Order:       2,
-		Duration:    "3 Jam",
-		IsPublished: true,
-	}
-	database.DB.Create(&mod1)
-	database.DB.Create(&mod2)
-
-	log.Println("Database seeding completed successfully!")
+	log.Printf("[seed] completed in %s", time.Since(start).Round(time.Millisecond))
 }
 
-// SeedAdminIfMissing ensures a dedicated admin user exists, even if database was already seeded
+// ─── Preserved Functions ──────────────────────────────────────────────────────
+
 func SeedAdminIfMissing() {
 	var admin model.User
 	if err := database.DB.Where("role = ? AND email = ?", "admin", "admin@admin.com").First(&admin).Error; err != nil {
@@ -127,17 +136,14 @@ func SeedAdminIfMissing() {
 	}
 }
 
-// SeedTestStudents creates deterministic student accounts for load testing.
 func SeedTestStudents(count int) error {
 	if count <= 0 {
 		return nil
 	}
-
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-
 	students := make([]model.User, 0, count)
 	for i := 1; i <= count; i++ {
 		students = append(students, model.User{
@@ -147,7 +153,6 @@ func SeedTestStudents(count int) error {
 			Role:         "student",
 		})
 	}
-
 	result := database.DB.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "email"}},
 		DoNothing: true,
@@ -155,7 +160,6 @@ func SeedTestStudents(count int) error {
 	if result.Error != nil {
 		return result.Error
 	}
-
 	log.Printf("Seeded %d load test students (duplicates ignored)", count)
 	return nil
 }

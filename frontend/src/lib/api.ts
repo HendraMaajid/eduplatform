@@ -1,11 +1,17 @@
-import { getSession } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080") + "/api";
 
 export const api = {
   async fetch(endpoint: string, options: RequestInit = {}) {
     const session = await getSession();
-    
+
+    // If session has refresh error, force logout
+    if ((session as any)?.error === "RefreshTokenExpired") {
+      signOut({ callbackUrl: "/login" });
+      throw new Error("Session expired");
+    }
+
     const headers = {
       "Content-Type": "application/json",
       ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
@@ -18,6 +24,12 @@ export const api = {
     });
 
     if (!response.ok) {
+      // If 401, force re-login
+      if (response.status === 401) {
+        signOut({ callbackUrl: "/login" });
+        throw new Error("Session expired");
+      }
+
       let errorData;
       try {
         errorData = await response.json();

@@ -24,9 +24,9 @@ type Enrollment struct {
 
 type Payment struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	CourseID  uuid.UUID `gorm:"type:uuid;not null;index" json:"courseId"`
+	CourseID  uuid.UUID `gorm:"type:uuid;not null;index:idx_payment_student_course,unique" json:"courseId"`
 	Course    *Course   `gorm:"foreignKey:CourseID" json:"course,omitempty"`
-	StudentID uuid.UUID `gorm:"type:uuid;not null;index" json:"studentId"`
+	StudentID uuid.UUID `gorm:"type:uuid;not null;index:idx_payment_student_course,unique" json:"studentId"`
 	Amount    int       `gorm:"default:0" json:"amount"`
 	PaidAt    time.Time `json:"paidAt"`
 }

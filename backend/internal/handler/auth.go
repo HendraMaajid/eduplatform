@@ -41,14 +41,44 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token, user, err := service.LoginUser(req)
+	accessToken, refreshToken, user, err := service.LoginUser(req)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, dto.AuthResponse{
-		Token: token,
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		User: dto.UserResponse{
+			ID:        user.ID.String(),
+			Name:      user.Name,
+			Email:     user.Email,
+			Role:      user.Role,
+			Avatar:    user.Avatar,
+			CreatedAt: user.CreatedAt,
+		},
+	})
+}
+
+func RefreshToken(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token is required"})
+		return
+	}
+
+	accessToken, newRefreshToken, user, err := service.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AuthResponse{
+		Token:        accessToken,
+		RefreshToken: newRefreshToken,
 		User: dto.UserResponse{
 			ID:        user.ID.String(),
 			Name:      user.Name,

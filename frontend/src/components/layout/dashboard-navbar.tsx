@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useTheme } from "next-themes";
@@ -262,7 +262,7 @@ export function DashboardNavbar() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="gap-2 text-destructive focus:text-destructive"
-              onClick={() => router.push("/login")}
+              onClick={() => signOut({ callbackUrl: "/login" })}
             >
               <LogOut className="h-4 w-4" />
               Keluar

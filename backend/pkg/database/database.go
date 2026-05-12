@@ -75,6 +75,7 @@ func InitDB() {
 			&model.Certificate{},
 			&model.Notification{},
 			&model.ModuleEmbedding{},
+			&model.RefreshToken{},
 		)
 
 		if err != nil {
