@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { AnimatedGroup } from "@/components/ui/animated-group";
 import { formatCurrency } from "@/lib/mock-data";
 import { api } from "@/lib/api";
 import {
@@ -25,6 +26,8 @@ import {
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { motion, useInView } from "motion/react";
+import { useRef } from "react";
 
 const features = [
   {
@@ -63,10 +66,27 @@ const levelLabels: Record<string, string> = {
   advanced: "Lanjutan",
 };
 
+// Animated section wrapper with viewport detection
+function AnimatedSection({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 30 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+      transition={{ duration: 0.6, ease: "easeOut", delay }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 export default function LandingPage() {
   const { theme, setTheme } = useTheme();
   const [courses, setCourses] = useState<any[]>([]);
-
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -88,7 +108,13 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl"
+      >
         <div className="container mx-auto relative flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2 z-10">
             <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
@@ -143,7 +169,6 @@ export default function LandingPage() {
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               <span className="sr-only">Toggle menu</span>
-              {/* Using inline SVG since Menu/X might not be imported if I just added them */}
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                 {isMobileMenuOpen ? (
                   <>
@@ -164,7 +189,12 @@ export default function LandingPage() {
 
         {/* Mobile Nav Dropdown */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-16 left-0 right-0 border-b border-border/50 bg-background/95 backdrop-blur-xl shadow-lg animate-in slide-in-from-top-2 p-4 flex flex-col gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden absolute top-16 left-0 right-0 border-b border-border/50 bg-background/95 backdrop-blur-xl shadow-lg p-4 flex flex-col gap-4"
+          >
             <button 
               onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setIsMobileMenuOpen(false); }} 
               className="text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2"
@@ -184,21 +214,31 @@ export default function LandingPage() {
             <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-foreground p-2">
               Masuk
             </Link>
-          </div>
+          </motion.div>
         )}
-      </header>
+      </motion.header>
 
       {/* Hero Section */}
       <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] flex items-center">
         {/* Background decorations */}
         <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
+            className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl"
+          />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-[120px]" />
         </div>
 
         <div className="container mx-auto px-4 py-16 md:py-0 mt-8 md:mt-0">
-          <div className="max-w-3xl mx-auto text-center space-y-6 md:space-y-8">
+          <AnimatedGroup preset="blur-slide" className="max-w-3xl mx-auto text-center space-y-6 md:space-y-8" staggerDelay={0.12} delay={0.2}>
             <Badge variant="outline" className="gap-2 py-1.5 px-4 text-sm border-primary/30 bg-primary/5">
               <Sparkles className="h-4 w-4 text-primary" />
               Platform Pembelajaran #1 di Indonesia
@@ -242,21 +282,23 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </AnimatedGroup>
         </div>
       </section>
 
       {/* Features */}
       <section id="features" className="py-20 bg-accent/30">
         <div className="container mx-auto px-4">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <Badge variant="outline" className="mb-4">Mengapa Kami?</Badge>
-            <h2 className="text-3xl font-bold">Belajar dengan Cara Terbaik</h2>
-            <p className="text-muted-foreground mt-2">
-              Platform kami dirancang untuk memberikan pengalaman belajar terbaik
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <AnimatedSection>
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <Badge variant="outline" className="mb-4">Mengapa Kami?</Badge>
+              <h2 className="text-3xl font-bold">Belajar dengan Cara Terbaik</h2>
+              <p className="text-muted-foreground mt-2">
+                Platform kami dirancang untuk memberikan pengalaman belajar terbaik
+              </p>
+            </div>
+          </AnimatedSection>
+          <AnimatedGroup preset="slide" className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" staggerDelay={0.1}>
             {features.map((f) => (
               <Card key={f.title} className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group">
                 <CardContent className="p-6 text-center">
@@ -268,28 +310,30 @@ export default function LandingPage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
+          </AnimatedGroup>
         </div>
       </section>
 
       {/* Courses */}
       <section id="courses" className="py-20">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-3xl font-bold">Kursus Populer</h2>
-              <p className="text-muted-foreground mt-1">Pilihan kursus terbaik untuk Anda</p>
+          <AnimatedSection>
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-3xl font-bold">Kursus Populer</h2>
+                <p className="text-muted-foreground mt-1">Pilihan kursus terbaik untuk Anda</p>
+              </div>
+              <Button variant="outline" className="gap-2 hidden sm:flex" asChild>
+                <Link href="/login">
+                  Lihat Semua <ChevronRight className="h-4 w-4" />
+                </Link>
+              </Button>
             </div>
-            <Button variant="outline" className="gap-2 hidden sm:flex" asChild>
-              <Link href="/login">
-                Lihat Semua <ChevronRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+          </AnimatedSection>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatedGroup preset="scale" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.15}>
             {courses
-              .filter((c) => c.status === "published" || c.status === "active" || c.status === "published")
+              .filter((c) => c.status === "published" || c.status === "active")
               .slice(0, 3)
               .map((course) => (
                 <Card key={course.id} className="group border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
@@ -298,7 +342,7 @@ export default function LandingPage() {
                       <img 
                         src={course.thumbnail.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${course.thumbnail}` : course.thumbnail} 
                         alt={course.title} 
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">
@@ -352,20 +396,22 @@ export default function LandingPage() {
                   </CardContent>
                 </Card>
               ))}
-          </div>
+          </AnimatedGroup>
         </div>
       </section>
 
       {/* Categories */}
       <section id="categories" className="py-20 bg-accent/30">
         <div className="container mx-auto px-4">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-3xl font-bold">Jelajahi Kategori</h2>
-            <p className="text-muted-foreground mt-2">
-              Temukan kursus berdasarkan bidang yang Anda minati
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <AnimatedSection>
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <h2 className="text-3xl font-bold">Jelajahi Kategori</h2>
+              <p className="text-muted-foreground mt-2">
+                Temukan kursus berdasarkan bidang yang Anda minati
+              </p>
+            </div>
+          </AnimatedSection>
+          <AnimatedGroup preset="scale" className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4" staggerDelay={0.08}>
             {categories.map((cat) => (
               <Card key={cat.name} className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer group">
                 <CardContent className="p-5 text-center">
@@ -377,14 +423,18 @@ export default function LandingPage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
+          </AnimatedGroup>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-20">
+      <AnimatedSection className="py-20">
         <div className="container mx-auto px-4">
-          <div className="relative overflow-hidden rounded-3xl gradient-primary p-12 md:p-16 text-center text-white">
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            transition={{ duration: 0.3 }}
+            className="relative overflow-hidden rounded-3xl gradient-primary p-12 md:p-16 text-center text-white"
+          >
             <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2040%2040%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0%200h40v40H0z%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M0%2040L40%200%22%20stroke%3D%22rgba(255%2C255%2C255%2C0.05)%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E')] opacity-30" />
             <div className="relative z-10 max-w-2xl mx-auto space-y-6">
               <h2 className="text-3xl md:text-4xl font-bold">
@@ -399,9 +449,9 @@ export default function LandingPage() {
                 </Link>
               </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* Footer */}
       <footer className="border-t border-border py-12">

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, Play, CheckCircle2, Trophy, Loader2 } from "lucide-react";
+import { motion } from "motion/react";
 
 const statusLabels: Record<string, { label: string; className: string }> = {
   active: { label: "Aktif", className: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
@@ -42,11 +43,16 @@ export default function StudentCoursesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <motion.div
+      className="space-y-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+    >
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <h1 className="text-2xl font-bold tracking-tight">Kursus Saya</h1>
         <p className="text-muted-foreground">Kelola dan lanjutkan kursus Anda</p>
-      </div>
+      </motion.div>
       
       {enrollments.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground bg-accent/30 rounded-xl border border-dashed border-border">
@@ -58,12 +64,18 @@ export default function StudentCoursesPage() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {enrollments.map((enrollment) => {
+          {enrollments.map((enrollment, idx) => {
             const course = enrollment.course;
             if (!course) return null;
             const status = statusLabels[enrollment.status] || statusLabels.active;
             return (
-              <Card key={enrollment.id} className="group border-0 shadow-md hover:shadow-lg transition-all overflow-hidden">
+              <motion.div
+                key={enrollment.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.08, duration: 0.4, ease: "easeOut" }}
+              >
+                <Card className="group border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 overflow-hidden">
                 <div className={`relative h-32 overflow-hidden ${!course.thumbnail ? 'gradient-primary' : 'bg-muted'}`}>
                   {course.thumbnail ? (
                     <img 
@@ -118,10 +130,11 @@ export default function StudentCoursesPage() {
                   )}
                 </CardContent>
               </Card>
+              </motion.div>
             );
           })}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

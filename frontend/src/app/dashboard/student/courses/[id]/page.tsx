@@ -182,7 +182,7 @@ export default function StudentCourseDetailPage() {
                 <CardTitle className="text-sm">Daftar Modul</CardTitle>
               </CardHeader>
               <CardContent className="p-2">
-                <ScrollArea className="max-h-[500px]">
+                <ScrollArea className="h-[500px]">
                   {modules.length === 0 && (
                     <p className="text-sm text-muted-foreground p-3 text-center">Belum ada modul</p>
                   )}

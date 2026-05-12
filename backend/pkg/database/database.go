@@ -59,6 +59,10 @@ func InitDB() {
 			log.Println("AI Chat RAG vector search will fall back to keyword search")
 		}
 
+		// Clean duplicates before migrate to prevent unique index creation failures
+		DB.Exec(`DELETE FROM payments a USING payments b WHERE a.ctid > b.ctid AND a.course_id = b.course_id AND a.student_id = b.student_id`)
+		DB.Exec(`DELETE FROM submissions a USING submissions b WHERE a.ctid > b.ctid AND a.assignment_id = b.assignment_id AND a.student_id = b.student_id`)
+
 		err = DB.AutoMigrate(
 			&model.User{},
 			&model.Course{},
