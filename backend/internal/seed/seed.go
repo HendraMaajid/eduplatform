@@ -106,6 +106,7 @@ func SeedAll() {
 		{"courses", seedCourses},
 		{"learning", seedLearning},
 		{"enrollments", seedEnrollments},
+		{"ratings", seedRatings},
 		{"notifications", seedNotifications},
 	}
 

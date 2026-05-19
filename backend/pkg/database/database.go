@@ -80,6 +80,7 @@ func InitDB() {
 			&model.Notification{},
 			&model.ModuleEmbedding{},
 			&model.RefreshToken{},
+			&model.Rating{},
 		)
 
 		if err != nil {

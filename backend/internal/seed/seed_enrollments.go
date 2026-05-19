@@ -20,6 +20,24 @@ func seedEnrollments(ctx *seedContext) error {
 	questionsByQuiz := ctx.Learning.QuestionsByQuiz
 	assignmentsByCourse := ctx.Learning.AssignmentsByCourse
 
+	// Early return: if enrollments already seeded, just load and skip
+	var enrollmentCount int64
+	database.DB.Model(&model.Enrollment{}).Count(&enrollmentCount)
+	if enrollmentCount >= int64(len(students)*3) {
+		log.Printf("[seed] enrollments: skipped (already %d enrollments exist)", enrollmentCount)
+		// Still populate ctx for downstream seeders
+		var existingEnrollments []model.Enrollment
+		database.DB.Find(&existingEnrollments)
+		var existingCerts []model.Certificate
+		database.DB.Find(&existingCerts)
+		ctx.Enrollments = &seededEnrollments{
+			Enrollments:  existingEnrollments,
+			Certificates: existingCerts,
+			CountByState: map[string]int{},
+		}
+		return nil
+	}
+
 	// Load existing enrollments to skip duplicates
 	var existingEnrollments []model.Enrollment
 	database.DB.Select("student_id", "course_id").Find(&existingEnrollments)

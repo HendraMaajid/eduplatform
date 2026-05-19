@@ -16,6 +16,23 @@ func seedCourses(ctx *seedContext) error {
 	rng := ctx.Cfg.RNG
 	teachers := ctx.Users.Teachers
 
+	// Early return: if courses already seeded, just load existing data
+	var courseCount int64
+	database.DB.Model(&model.Course{}).Count(&courseCount)
+	if courseCount >= int64(len(courseTemplates)) {
+		log.Printf("[seed] courses: skipped (already %d courses exist)", courseCount)
+		var courses []model.Course
+		database.DB.Order("created_at").Find(&courses)
+		var allModules []model.Module
+		database.DB.Find(&allModules)
+		modulesByCourse := make(map[uuid.UUID][]model.Module)
+		for i := range allModules {
+			modulesByCourse[allModules[i].CourseID] = append(modulesByCourse[allModules[i].CourseID], allModules[i])
+		}
+		ctx.Courses = &seededCourses{Courses: courses, Modules: allModules, ModulesByCourse: modulesByCourse}
+		return nil
+	}
+
 	// Build courses
 	courses := make([]model.Course, 0, len(courseTemplates))
 	for i, ct := range courseTemplates {

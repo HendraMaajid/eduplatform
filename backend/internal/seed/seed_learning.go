@@ -16,6 +16,36 @@ func seedLearning(ctx *seedContext) error {
 	rng := ctx.Cfg.RNG
 	courses := ctx.Courses.Courses
 
+	// Early return: if quizzes already seeded, just load existing data
+	var quizCount int64
+	database.DB.Model(&model.Quiz{}).Count(&quizCount)
+	if quizCount >= int64(len(courses)*2) {
+		log.Printf("[seed] learning: skipped (already %d quizzes exist)", quizCount)
+		var allQuizzes []model.Quiz
+		database.DB.Find(&allQuizzes)
+		var allQuestions []model.Question
+		database.DB.Find(&allQuestions)
+		var allAssignments []model.Assignment
+		database.DB.Find(&allAssignments)
+		quizzesByCourse := make(map[uuid.UUID][]model.Quiz)
+		questionsByQuiz := make(map[uuid.UUID][]model.Question)
+		assignmentsByCourse := make(map[uuid.UUID][]model.Assignment)
+		for i := range allQuizzes {
+			quizzesByCourse[allQuizzes[i].CourseID] = append(quizzesByCourse[allQuizzes[i].CourseID], allQuizzes[i])
+		}
+		for i := range allQuestions {
+			questionsByQuiz[allQuestions[i].QuizID] = append(questionsByQuiz[allQuestions[i].QuizID], allQuestions[i])
+		}
+		for i := range allAssignments {
+			assignmentsByCourse[allAssignments[i].CourseID] = append(assignmentsByCourse[allAssignments[i].CourseID], allAssignments[i])
+		}
+		ctx.Learning = &seededLearning{
+			Quizzes: allQuizzes, Questions: allQuestions, Assignments: allAssignments,
+			QuizzesByCourse: quizzesByCourse, QuestionsByQuiz: questionsByQuiz, AssignmentsByCourse: assignmentsByCourse,
+		}
+		return nil
+	}
+
 	quizzesByCourse := make(map[uuid.UUID][]model.Quiz)
 	questionsByQuiz := make(map[uuid.UUID][]model.Question)
 	assignmentsByCourse := make(map[uuid.UUID][]model.Assignment)

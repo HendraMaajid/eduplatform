@@ -88,6 +88,7 @@ func main() {
 		api.GET("/courses", handler.GetCourses)
 		api.GET("/courses/:id", handler.GetCourseByID)
 		api.GET("/courses/:id/modules", handler.GetModules)
+		api.GET("/courses/:id/ratings", handler.GetCourseRatings)
 
 		// Protected Routes
 		protected := api.Group("/")
@@ -111,6 +112,8 @@ func main() {
 			protected.POST("/courses/:id/enroll", handler.EnrollCourse)
 			protected.POST("/courses/:id/modules/:moduleId/complete", handler.CompleteModule)
 			protected.POST("/courses/:id/certificates", handler.GenerateCertificate)
+			protected.POST("/courses/:id/ratings", handler.CreateRating)
+			protected.GET("/courses/:id/ratings/me", handler.GetMyRating)
 			protected.POST("/assignments/:id/submit", handler.SubmitAssignment)
 			protected.POST("/quizzes/:id/submit", handler.SubmitQuiz)
 			protected.GET("/quizzes/:id/attempt", handler.GetQuizAttempt)

@@ -357,7 +357,7 @@ export default function LandingPage() {
                     <div className="absolute top-3 right-3">
                       <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30 gap-1">
                         <Star className="h-3 w-3 fill-current" />
-                        {course.rating || "4.5"}
+                        {course.rating ? course.rating.toFixed(1) : "Baru"}
                       </Badge>
                     </div>
                   </div>

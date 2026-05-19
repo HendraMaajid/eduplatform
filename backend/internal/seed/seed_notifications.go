@@ -15,6 +15,14 @@ func seedNotifications(ctx *seedContext) error {
 	rng := ctx.Cfg.RNG
 	courses := ctx.Courses.Courses
 
+	// Early return: if notifications already seeded, skip
+	var notifCount int64
+	database.DB.Model(&model.Notification{}).Count(&notifCount)
+	if notifCount > 50 {
+		log.Printf("[seed] notifications: skipped (already %d exist)", notifCount)
+		return nil
+	}
+
 	// Build course title lookup by teacher
 	coursesByTeacher := map[string][]model.Course{}
 	for _, c := range courses {

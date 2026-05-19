@@ -11,10 +11,12 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   BookOpen, FileText, HelpCircle, FolderGit2,
   CheckCircle2, Circle, Play, Clock, ArrowLeft,
-  ChevronRight, Lock, Loader2, RotateCcw, Trophy, XCircle
+  ChevronRight, Lock, Loader2, RotateCcw, Trophy, XCircle, Star
 } from "lucide-react";
 import { toast } from "sonner";
 import { stripHtml, RichContent } from "@/lib/html-utils";
@@ -34,6 +36,11 @@ export default function StudentCourseDetailPage() {
   const [quizAttempts, setQuizAttempts] = useState<Record<string, any>>({});
   
   const [selectedModule, setSelectedModule] = useState("");
+  const [myRating, setMyRating] = useState<{ score: number; review: string } | null>(null);
+  const [ratings, setRatings] = useState<any[]>([]);
+  const [ratingScore, setRatingScore] = useState(0);
+  const [ratingReview, setRatingReview] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   useEffect(() => {
     const fetchCourseData = async () => {
@@ -77,6 +84,22 @@ export default function StudentCourseDetailPage() {
           );
           setQuizAttempts(attemptsMap);
         }
+
+        // Fetch ratings
+        try {
+          const [ratingsData, myRatingData] = await Promise.all([
+            api.get(`/courses/${courseId}/ratings`),
+            api.get(`/courses/${courseId}/ratings/me`).catch(() => null),
+          ]);
+          setRatings(ratingsData || []);
+          if (myRatingData) {
+            setMyRating(myRatingData);
+            setRatingScore(myRatingData.score);
+            setRatingReview(myRatingData.review || "");
+          }
+        } catch {
+          // Ratings not available yet
+        }
       } catch (error) {
         console.error("Failed to fetch course details", error);
       } finally {
@@ -98,6 +121,29 @@ export default function StudentCourseDetailPage() {
       setEnrollment(updatedEnrollment);
     } catch (error) {
       console.error("Gagal menandai modul selesai", error);
+    }
+  };
+
+  const handleSubmitRating = async () => {
+    if (ratingScore === 0) {
+      toast.error("Pilih rating terlebih dahulu");
+      return;
+    }
+    setSubmittingRating(true);
+    try {
+      const result = await api.post(`/courses/${courseId}/ratings`, {
+        score: ratingScore,
+        review: ratingReview,
+      });
+      setMyRating(result);
+      toast.success("Rating berhasil disimpan!");
+      // Refresh ratings list
+      const ratingsData = await api.get(`/courses/${courseId}/ratings`);
+      setRatings(ratingsData || []);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menyimpan rating");
+    } finally {
+      setSubmittingRating(false);
     }
   };
 
@@ -171,6 +217,7 @@ export default function StudentCourseDetailPage() {
           <TabsTrigger value="modules" className="gap-1.5"><FileText className="h-3 w-3" /> Materi ({modules.length})</TabsTrigger>
           <TabsTrigger value="quizzes" className="gap-1.5"><HelpCircle className="h-3 w-3" /> Kuis ({quizzes.length})</TabsTrigger>
           <TabsTrigger value="assignments" className="gap-1.5"><FolderGit2 className="h-3 w-3" /> Tugas ({assignments.length})</TabsTrigger>
+          <TabsTrigger value="ratings" className="gap-1.5"><Star className="h-3 w-3" /> Rating</TabsTrigger>
         </TabsList>
 
         {/* Modules Tab */}
@@ -416,6 +463,103 @@ export default function StudentCourseDetailPage() {
               );
             })
           )}
+        </TabsContent>
+
+        {/* Rating Tab */}
+        <TabsContent value="ratings" className="mt-4 space-y-6">
+          {/* Submit Rating */}
+          <Card className="border-0 shadow-md">
+            <CardHeader>
+              <CardTitle className="text-lg">Beri Rating</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRatingScore(star)}
+                    className="p-1 transition-transform hover:scale-110"
+                  >
+                    <Star
+                      className={`h-7 w-7 ${
+                        star <= ratingScore
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-muted-foreground/30"
+                      }`}
+                    />
+                  </button>
+                ))}
+                {ratingScore > 0 && (
+                  <span className="ml-2 text-sm text-muted-foreground">{ratingScore}/5</span>
+                )}
+              </div>
+              <Textarea
+                placeholder="Tulis ulasan Anda (opsional)..."
+                value={ratingReview}
+                onChange={(e) => setRatingReview(e.target.value)}
+                rows={3}
+              />
+              <Button
+                onClick={handleSubmitRating}
+                disabled={submittingRating || ratingScore === 0}
+                className="gradient-primary text-white"
+              >
+                {submittingRating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {myRating ? "Update Rating" : "Kirim Rating"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Ratings List */}
+          <Card className="border-0 shadow-md">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                Ulasan ({ratings.length})
+                {course.rating > 0 && (
+                  <Badge variant="outline" className="gap-1">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    {course.rating.toFixed(1)}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {ratings.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Belum ada ulasan</p>
+              ) : (
+                <div className="space-y-4">
+                  {ratings.map((r: any) => (
+                    <div key={r.id} className="flex gap-3 pb-4 border-b last:border-0 last:pb-0">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {r.student?.name?.charAt(0) || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{r.student?.name || "Anonim"}</span>
+                          <div className="flex">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                className={`h-3 w-3 ${
+                                  s <= r.score ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {r.review && (
+                          <p className="text-sm text-muted-foreground mt-1">{r.review}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

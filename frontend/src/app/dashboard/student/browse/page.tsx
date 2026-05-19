@@ -175,7 +175,7 @@ export default function StudentBrowsePage() {
               {/* Note: The backend rating is not fully implemented yet, use default for now */}
               <div className="absolute top-3 right-3">
                 <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30 gap-1">
-                  <Star className="h-3 w-3 fill-current" /> {course.rating || "4.5"}
+                  <Star className="h-3 w-3 fill-current" /> {course.rating ? course.rating.toFixed(1) : "Baru"}
                 </Badge>
               </div>
             </div>
