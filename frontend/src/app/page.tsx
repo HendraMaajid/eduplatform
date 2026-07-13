@@ -1,474 +1,255 @@
-"use client";
-
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { getLocale, getTranslations } from "next-intl/server";
+import { ArrowRight, BookOpen, CheckCircle2, Code2, Sparkles, Star, Trophy } from "lucide-react";
+import { CourseCard } from "@/components/course/course-card";
+import { PublicCourseAction } from "@/components/course/public-course-action";
+import { LandingFooter } from "@/components/landing/landing-footer";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { AnimatedGroup } from "@/components/ui/animated-group";
-import { formatCurrency } from "@/lib/mock-data";
-import { api } from "@/lib/api";
-import {
-  GraduationCap,
-  BookOpen,
-  Users,
-  Trophy,
-  Star,
-  ArrowRight,
-  Play,
-  ChevronRight,
-  Sparkles,
-  Code,
-  Palette,
-  Database,
-  Cloud,
-  Moon,
-  Sun,
-} from "lucide-react";
-import { useTheme } from "next-themes";
-import { motion, useInView } from "motion/react";
-import { useRef } from "react";
+import { Button } from "@/components/ui/button";
+import type { Course, PaginatedResponse } from "@/lib/types";
+import { getPlatformSettings } from "@/lib/platform-settings";
+import { LandingHeroActions } from "@/components/landing/landing-hero-actions";
+import { LandingHeader } from "@/components/landing/landing-header";
 
-const features = [
-  {
-    icon: BookOpen,
-    title: "Materi Berkualitas",
-    desc: "Kursus disusun oleh instruktur berpengalaman dengan kurikulum terkini",
-  },
-  {
-    icon: Code,
-    title: "Project-Based",
-    desc: "Belajar dengan membangun proyek nyata yang bisa ditambahkan ke portofolio",
-  },
-  {
-    icon: Trophy,
-    title: "Sertifikat",
-    desc: "Dapatkan sertifikat resmi setelah menyelesaikan kursus",
-  },
-  {
-    icon: Users,
-    title: "Komunitas",
-    desc: "Bergabung dengan komunitas learner yang saling membantu",
-  },
-];
+const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api`;
 
-const categories = [
-  { name: "Mobile Dev", icon: Code, count: 5, color: "from-blue-500 to-cyan-500" },
-  { name: "Web Dev", icon: Code, count: 8, color: "from-indigo-500 to-violet-500" },
-  { name: "UI/UX Design", icon: Palette, count: 4, color: "from-pink-500 to-rose-500" },
-  { name: "Data Science", icon: Database, count: 3, color: "from-emerald-500 to-teal-500" },
-  { name: "DevOps", icon: Cloud, count: 2, color: "from-orange-500 to-amber-500" },
-];
-
-const levelLabels: Record<string, string> = {
-  beginner: "Pemula",
-  intermediate: "Menengah",
-  advanced: "Lanjutan",
-};
-
-// Animated section wrapper with viewport detection
-function AnimatedSection({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-80px" });
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 30 }}
-      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-      transition={{ duration: 0.6, ease: "easeOut", delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
+async function getLandingData() {
+  try {
+    const coursesResponse = await fetch(`${apiUrl}/courses?limit=6`, {
+      next: { revalidate: 60 },
+    });
+    const courses = coursesResponse.ok
+      ? ((await coursesResponse.json()) as PaginatedResponse<Course>).data
+      : [];
+    return courses;
+  } catch {
+    return [] as Course[];
+  }
 }
 
-export default function LandingPage() {
-  const { theme, setTheme } = useTheme();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+export async function generateMetadata(): Promise<Metadata> {
+  const [locale, platform, t] = await Promise.all([
+    getLocale(),
+    getPlatformSettings(),
+    getTranslations("landing"),
+  ]);
+  const description =
+    (locale === "en" ? platform.descriptionEn : platform.descriptionId) || t("metaDescription");
+  return {
+    title: `${t("metaTitle")} | ${platform.name}`,
+    description,
+    openGraph: {
+      title: `${t("metaTitle")} | ${platform.name}`,
+      description,
+    },
+    twitter: {
+      title: `${t("metaTitle")} | ${platform.name}`,
+      description,
+    },
+  };
+}
 
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const res = await api.get("/courses?limit=6");
-        if (res) {
-          const courseList = res.data || res;
-          if (Array.isArray(courseList)) {
-            setCourses(courseList);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch courses:", error);
-      }
-    };
-    fetchCourses();
-  }, []);
+export default async function LandingPage() {
+  const [courses, platform, locale, t] = await Promise.all([
+    getLandingData(),
+    getPlatformSettings(),
+    getLocale(),
+    getTranslations("landing"),
+  ]);
+  const platformName = platform.name;
+  const platformDescription =
+    (locale === "en" ? platform.descriptionEn : platform.descriptionId) || t("heroDesc");
+  const learningSteps = [
+    { Icon: BookOpen, title: t("steps.chooseTitle"), description: t("steps.chooseDescription") },
+    { Icon: Code2, title: t("steps.practiceTitle"), description: t("steps.practiceDescription") },
+    {
+      Icon: Trophy,
+      title: t("steps.certificateTitle"),
+      description: t("steps.certificateDescription"),
+    },
+  ];
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl"
-      >
-        <div className="container mx-auto relative flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 z-10">
-            <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-primary/20">
-              <GraduationCap className="h-5 w-5 text-white" />
+    <main className="min-h-screen overflow-hidden">
+      <LandingHeader platformName={platformName} />
+
+      <section className="relative overflow-hidden border-b bg-[#eef3ff] py-14 dark:bg-[#122442] sm:py-20 lg:py-24">
+        <div className="dot-grid absolute inset-0 opacity-50" />
+        <BookOpen
+          className="pointer-events-none absolute -left-5 top-24 size-28 -rotate-12 text-primary/15"
+          strokeWidth={1.25}
+          aria-hidden="true"
+        />
+        <Code2
+          className="pointer-events-none absolute left-[24%] top-28 hidden size-12 rotate-6 text-primary/15 lg:block"
+          strokeWidth={1.25}
+          aria-hidden="true"
+        />
+        <Star
+          className="pointer-events-none absolute right-[3%] top-28 size-10 rotate-12 text-[#d6a900]/45"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full text-primary/20"
+          viewBox="0 0 1440 120"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M0 36 C120 8 150 112 280 74 S470 26 590 82 M1160 20 C1240 8 1245 94 1325 78 S1390 48 1440 66"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeDasharray="8 9"
+          />
+        </svg>
+        <div className="page-shell relative grid items-center gap-10 lg:grid-cols-[1.05fr_.95fr]">
+          <div className="max-w-2xl">
+            <Badge className="mb-5 border-2 border-foreground/10 bg-accent text-accent-foreground">
+              <Sparkles /> {t("freeForever")}
+            </Badge>
+            <h1 className="text-balance text-4xl font-extrabold leading-[1.08] tracking-[-.04em] text-foreground sm:text-5xl lg:text-7xl">
+              {t("heroTitle")}{" "}
+              <span className="relative text-primary">
+                {t("heroHighlight")}
+                <span className="absolute -bottom-1 left-0 h-2 w-full rounded-full bg-[#f4c542]/70" />
+              </span>
+            </h1>
+            <p className="mt-6 max-w-xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
+              {platformDescription}
+            </p>
+            <LandingHeroActions />
+            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-foreground/80">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-[#25956f]" />
+                {t("noCreditCard")}
+              </span>
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-[#25956f]" />
+                {t("selfPaced")}
+              </span>
             </div>
-            <span className="text-xl font-bold gradient-text">EduPlatform</span>
-          </Link>
+          </div>
+          <div className="relative mx-auto w-full max-w-xl">
+            <div className="absolute inset-x-8 bottom-1 h-12 rounded-[50%] bg-navy/10 blur-xl" />
+            <Image
+              src="/illustrations/hero-learners.png"
+              alt={t("heroImageAlt")}
+              width={1448}
+              height={1086}
+              priority
+              className="relative h-auto w-full"
+            />
+          </div>
+        </div>
+      </section>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-6">
-            <button 
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} 
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Home
-            </button>
-            <Link href="#courses" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Kursus
-            </Link>
-            <Link href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Fitur
-            </Link>
-            <Link href="#categories" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Kategori
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-2 sm:gap-3 z-10">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="h-9 w-9"
-            >
-              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            </Button>
-            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-              <Link href="/login">Masuk</Link>
-            </Button>
-            <Button size="sm" className="gradient-primary text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow" asChild>
-              <Link href="/register">
-                Mulai <span className="hidden sm:inline ml-1">Belajar</span> <ArrowRight className="h-4 w-4 ml-1" />
+      <section id="courses" className="relative overflow-hidden py-16 sm:py-20">
+        <div className="page-shell relative">
+          <div className="mb-8 flex items-end justify-between gap-4">
+            <div>
+              <p className="mb-2 text-sm font-bold uppercase tracking-[.16em] text-primary">
+                {t("featuredEyebrow")}
+              </p>
+              <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+                {t("featuredTitle")}
+              </h2>
+            </div>
+            <Button variant="outline" asChild className="hidden sm:inline-flex">
+              <Link href="/courses">
+                {t("allCourses")} <ArrowRight data-icon="inline-end" />
               </Link>
             </Button>
-            
-            {/* Mobile Menu Toggle */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="md:hidden h-9 w-9"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              <span className="sr-only">Toggle menu</span>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                {isMobileMenuOpen ? (
-                  <>
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </>
-                ) : (
-                  <>
-                    <line x1="4" y1="12" x2="20" y2="12"></line>
-                    <line x1="4" y1="6" x2="20" y2="6"></line>
-                    <line x1="4" y1="18" x2="20" y2="18"></line>
-                  </>
-                )}
-              </svg>
+          </div>
+          {courses.length ? (
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {courses.slice(0, 6).map((course) => (
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  actionSlot={<PublicCourseAction courseId={course.id} />}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border-2 border-dashed bg-muted/30 p-10 text-center">
+              <BookOpen className="mx-auto mb-3 size-9 text-primary" />
+              <h3 className="font-bold">{t("emptyCoursesTitle")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{t("emptyCoursesDescription")}</p>
+            </div>
+          )}
+          <div className="mt-8 flex justify-center sm:hidden">
+            <Button variant="outline" asChild>
+              <Link href="/courses">
+                {t("allCourses")} <ArrowRight data-icon="inline-end" />
+              </Link>
             </Button>
           </div>
         </div>
-
-        {/* Mobile Nav Dropdown */}
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden absolute top-16 left-0 right-0 border-b border-border/50 bg-background/95 backdrop-blur-xl shadow-lg p-4 flex flex-col gap-4"
-          >
-            <button 
-              onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setIsMobileMenuOpen(false); }} 
-              className="text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2"
-            >
-              Home
-            </button>
-            <Link href="#courses" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2">
-              Kursus
-            </Link>
-            <Link href="#features" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2">
-              Fitur
-            </Link>
-            <Link href="#categories" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors p-2">
-              Kategori
-            </Link>
-            <div className="h-px bg-border my-2" />
-            <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium text-foreground p-2">
-              Masuk
-            </Link>
-          </motion.div>
-        )}
-      </motion.header>
-
-      {/* Hero Section */}
-      <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] flex items-center">
-        {/* Background decorations */}
-        <div className="absolute inset-0 -z-10">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
-            className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl"
+        <BookOpen
+          className="pointer-events-none absolute -bottom-7 right-[7%] size-24 rotate-12 text-primary/10"
+          strokeWidth={1.25}
+          aria-hidden="true"
+        />
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-1 h-16 w-full text-primary/15"
+          viewBox="0 0 1440 80"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M180 58 C300 8 420 74 560 36 S820 72 960 32 S1210 70 1380 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeDasharray="8 9"
           />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
-            className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl"
-          />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-[120px]" />
-        </div>
+        </svg>
+      </section>
 
-        <div className="container mx-auto px-4 py-16 md:py-0 mt-8 md:mt-0">
-          <AnimatedGroup preset="blur-slide" className="max-w-3xl mx-auto text-center space-y-6 md:space-y-8" staggerDelay={0.12} delay={0.2}>
-            <Badge variant="outline" className="gap-2 py-1.5 px-4 text-sm border-primary/30 bg-primary/5">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Platform Pembelajaran #1 di Indonesia
-            </Badge>
-
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
-              Tingkatkan Skill Anda dengan{" "}
-              <span className="gradient-text">Kursus Berkualitas</span>
-            </h1>
-
-            <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
-              Pelajari teknologi terkini dari instruktur berpengalaman.
-              Bangun portofolio nyata dan dapatkan sertifikat profesional.
+      <section
+        id="how"
+        className="relative overflow-hidden border-y bg-secondary/60 py-16 sm:py-20"
+      >
+        <div className="dot-grid pointer-events-none absolute inset-0 opacity-25" />
+        <Star
+          className="pointer-events-none absolute right-[5%] top-12 size-14 rotate-12 text-[#d6a900]/35"
+          strokeWidth={1.25}
+          aria-hidden="true"
+        />
+        <div className="page-shell relative">
+          <div className="text-center">
+            <p className="text-sm font-bold uppercase tracking-[.16em] text-primary">
+              {t("howEyebrow")}
             </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 w-full px-4 sm:px-0">
-              <Button size="lg" className="w-full sm:w-auto gradient-primary text-white shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all text-base px-8" asChild>
-                <Link href="/register">
-                  Mulai Belajar Gratis <ArrowRight className="h-5 w-5 ml-2" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto text-base px-8" asChild>
-                <Link href="#courses">
-                  <Play className="h-5 w-5 mr-2" />
-                  Jelajahi Kursus
-                </Link>
-              </Button>
-            </div>
-
-            {/* Stats */}
-            <div className="flex items-center justify-center gap-8 md:gap-12 pt-8">
-              {[
-                { value: "5+", label: "Kursus" },
-                { value: "180+", label: "Siswa" },
-                { value: "10+", label: "Instruktur" },
-                { value: "4.8", label: "Rating" },
-              ].map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <p className="text-2xl md:text-3xl font-bold gradient-text">{stat.value}</p>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
+            <h2 className="mt-2 text-3xl font-extrabold">{t("howTitle")}</h2>
+          </div>
+          <div className="relative mt-12 grid gap-8 sm:grid-cols-3">
+            <div className="pointer-events-none absolute left-[17%] right-[17%] top-14 hidden border-t-2 border-dashed border-primary/25 sm:block" />
+            {learningSteps.map(({ Icon, title, description }, index) => {
+              return (
+                <div key={title} className="relative flex flex-col items-center text-center">
+                  <div className="relative z-10 grid size-28 place-items-center rounded-full border-2 bg-card shadow-sm">
+                    <span className="absolute -top-3 grid size-8 place-items-center rounded-full bg-primary text-sm font-extrabold text-primary-foreground">
+                      {index + 1}
+                    </span>
+                    <Icon className="size-11 text-primary" strokeWidth={1.75} />
+                  </div>
+                  <h3 className="mt-5 font-bold">{title}</h3>
+                  <p className="mt-2 max-w-xs text-sm leading-6 text-muted-foreground">
+                    {description}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </AnimatedGroup>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" className="py-20 bg-accent/30">
-        <div className="container mx-auto px-4">
-          <AnimatedSection>
-            <div className="text-center max-w-2xl mx-auto mb-12">
-              <Badge variant="outline" className="mb-4">Mengapa Kami?</Badge>
-              <h2 className="text-3xl font-bold">Belajar dengan Cara Terbaik</h2>
-              <p className="text-muted-foreground mt-2">
-                Platform kami dirancang untuk memberikan pengalaman belajar terbaik
-              </p>
-            </div>
-          </AnimatedSection>
-          <AnimatedGroup preset="slide" className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" staggerDelay={0.1}>
-            {features.map((f) => (
-              <Card key={f.title} className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group">
-                <CardContent className="p-6 text-center">
-                  <div className="mx-auto mb-4 h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform">
-                    <f.icon className="h-7 w-7 text-white" />
-                  </div>
-                  <h3 className="font-semibold mb-2">{f.title}</h3>
-                  <p className="text-sm text-muted-foreground">{f.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </AnimatedGroup>
-        </div>
-      </section>
-
-      {/* Courses */}
-      <section id="courses" className="py-20">
-        <div className="container mx-auto px-4">
-          <AnimatedSection>
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-3xl font-bold">Kursus Populer</h2>
-                <p className="text-muted-foreground mt-1">Pilihan kursus terbaik untuk Anda</p>
-              </div>
-              <Button variant="outline" className="gap-2 hidden sm:flex" asChild>
-                <Link href="/login">
-                  Lihat Semua <ChevronRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </AnimatedSection>
-
-          <AnimatedGroup preset="scale" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.15}>
-            {courses
-              .filter((c) => c.status === "published" || c.status === "active")
-              .slice(0, 3)
-              .map((course) => (
-                <Card key={course.id} className="group border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-                  <div className={`relative h-48 overflow-hidden ${!course.thumbnail ? 'gradient-primary' : 'bg-muted'}`}>
-                    {course.thumbnail ? (
-                      <img 
-                        src={course.thumbnail.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${course.thumbnail}` : course.thumbnail} 
-                        alt={course.title} 
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <BookOpen className="h-16 w-16 text-white/30" />
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3">
-                      <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30">
-                        {levelLabels[course.level] || course.level || "Beginner"}
-                      </Badge>
-                    </div>
-                    <div className="absolute top-3 right-3">
-                      <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30 gap-1">
-                        <Star className="h-3 w-3 fill-current" />
-                        {course.rating ? course.rating.toFixed(1) : "Baru"}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <CardContent className="p-5">
-                    <Badge variant="outline" className="text-xs mb-2">{course.category}</Badge>
-                    <h3 className="font-semibold text-lg line-clamp-1 group-hover:text-primary transition-colors">
-                      {course.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                      {course.shortDescription}
-                    </p>
-
-                    <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <BookOpen className="h-3 w-3" />
-                        {course.modules?.length || course.totalModules || 0} modul
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {course.enrolledStudents || 0} siswa
-                      </span>
-                      <span>{course.duration || "12 Minggu"}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                      <span className="text-lg font-bold text-primary">
-                        {formatCurrency(course.price)}
-                      </span>
-                      <Button size="sm" className="gap-1" asChild>
-                        <Link href="/register">
-                          Daftar <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-          </AnimatedGroup>
-        </div>
-      </section>
-
-      {/* Categories */}
-      <section id="categories" className="py-20 bg-accent/30">
-        <div className="container mx-auto px-4">
-          <AnimatedSection>
-            <div className="text-center max-w-2xl mx-auto mb-12">
-              <h2 className="text-3xl font-bold">Jelajahi Kategori</h2>
-              <p className="text-muted-foreground mt-2">
-                Temukan kursus berdasarkan bidang yang Anda minati
-              </p>
-            </div>
-          </AnimatedSection>
-          <AnimatedGroup preset="scale" className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4" staggerDelay={0.08}>
-            {categories.map((cat) => (
-              <Card key={cat.name} className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer group">
-                <CardContent className="p-5 text-center">
-                  <div className={`mx-auto mb-3 h-12 w-12 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                    <cat.icon className="h-6 w-6 text-white" />
-                  </div>
-                  <h3 className="font-semibold text-sm">{cat.name}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">{cat.count} kursus</p>
-                </CardContent>
-              </Card>
-            ))}
-          </AnimatedGroup>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <AnimatedSection className="py-20">
-        <div className="container mx-auto px-4">
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            transition={{ duration: 0.3 }}
-            className="relative overflow-hidden rounded-3xl gradient-primary p-12 md:p-16 text-center text-white"
-          >
-            <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2040%2040%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M0%200h40v40H0z%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M0%2040L40%200%22%20stroke%3D%22rgba(255%2C255%2C255%2C0.05)%22%20stroke-width%3D%221%22%2F%3E%3C%2Fsvg%3E')] opacity-30" />
-            <div className="relative z-10 max-w-2xl mx-auto space-y-6">
-              <h2 className="text-3xl md:text-4xl font-bold">
-                Siap Memulai Perjalanan Belajar Anda?
-              </h2>
-              <p className="text-lg text-white/80">
-                Bergabung dengan ribuan pelajar dan mulai bangun karir impian Anda hari ini.
-              </p>
-              <Button size="lg" variant="secondary" className="text-base px-8 shadow-xl" asChild>
-                <Link href="/register">
-                  Daftar Sekarang — Gratis <ArrowRight className="h-5 w-5 ml-2" />
-                </Link>
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      </AnimatedSection>
-
-      {/* Footer */}
-      <footer className="border-t border-border py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center">
-                <GraduationCap className="h-4 w-4 text-white" />
-              </div>
-              <span className="font-bold gradient-text">EduPlatform</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              © 2024 EduPlatform. All rights reserved.
-            </p>
+              );
+            })}
           </div>
         </div>
-      </footer>
-    </div>
+      </section>
+
+      <LandingFooter platformName={platformName} supportEmail={platform.supportEmail} />
+    </main>
   );
 }

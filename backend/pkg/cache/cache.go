@@ -15,8 +15,8 @@ type entry struct {
 
 // Cache is a thread-safe, TTL-based in-memory cache.
 type Cache struct {
-	mu      sync.RWMutex
-	items   map[string]entry
+	mu         sync.RWMutex
+	items      map[string]entry
 	defaultTTL time.Duration
 }
 

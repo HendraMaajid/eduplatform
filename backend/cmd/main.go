@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"backend/internal/handler"
 	"backend/internal/middleware"
@@ -33,9 +34,11 @@ func main() {
 	// Initialize Database
 	database.InitDB()
 
-	// Seed dummy data (skips if data already exists)
-	// ⚠️ In production, set SKIP_SEED=true to disable seeding
-	if os.Getenv("SKIP_SEED") != "true" {
+	// Seed fixtures only when development explicitly opts in. Missing
+	// configuration must never recreate demo accounts after a cleanup.
+	isProduction := gin.Mode() == gin.ReleaseMode || os.Getenv("APP_ENV") == "production"
+	shouldSeed := os.Getenv("SKIP_SEED") == "false" && (!isProduction || os.Getenv("FORCE_SEED") == "true")
+	if shouldSeed {
 		seed.SeedAll()
 		seed.SeedAdminIfMissing()
 	}
@@ -51,6 +54,14 @@ func main() {
 
 	// Initialize Gin router
 	r := gin.Default()
+	trustedProxies := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES"))
+	if trustedProxies == "" {
+		if err := r.SetTrustedProxies(nil); err != nil {
+			log.Fatalf("disable trusted proxies: %v", err)
+		}
+	} else if err := r.SetTrustedProxies(strings.Split(trustedProxies, ",")); err != nil {
+		log.Fatalf("configure trusted proxies: %v", err)
+	}
 
 	// ── Global Middleware ──────────────────────────────────────────────
 	r.Use(middleware.CORS())
@@ -81,13 +92,16 @@ func main() {
 			// Rate-limited auth endpoints to prevent brute-force
 			auth.POST("/register", middleware.RateLimit("3-M"), handler.Register)
 			auth.POST("/login", middleware.RateLimit("10-M"), handler.Login)
+			auth.POST("/google", middleware.RateLimit("10-M"), handler.GoogleAuth)
 			auth.POST("/refresh", middleware.RateLimit("30-M"), handler.RefreshToken)
+			auth.POST("/logout", middleware.RateLimit("30-M"), handler.Logout)
 		}
 
-		// Public courses (read-only, no sensitive data)
+		// Public catalog exposes published course metadata only.
+		api.GET("/platform", handler.GetPublicPlatformSettings)
 		api.GET("/courses", handler.GetCourses)
 		api.GET("/courses/:id", handler.GetCourseByID)
-		api.GET("/courses/:id/modules", handler.GetModules)
+		api.GET("/course-categories", handler.GetCourseCategories)
 		api.GET("/courses/:id/ratings", handler.GetCourseRatings)
 
 		// Protected Routes
@@ -96,56 +110,66 @@ func main() {
 		{
 			// Users
 			protected.GET("/users/me", handler.GetMe)
+			protected.PATCH("/users/me", handler.UpdateMe)
+			protected.PUT("/users/me/password", handler.ChangeMyPassword)
+			protected.GET("/users/me/preferences", handler.GetMyPreferences)
+			protected.PUT("/users/me/preferences", handler.UpdateMyPreferences)
 
 			// Notifications
 			protected.GET("/notifications", handler.GetNotifications)
 			protected.PUT("/notifications/:id/read", handler.MarkNotificationAsRead)
 			protected.PUT("/notifications/read-all", handler.MarkAllNotificationsAsRead)
 
-			// Student Dashboard Routes
+			// Student learning routes. Opening any published course is free.
 			protected.GET("/dashboard/student", handler.GetStudentDashboard)
-			protected.GET("/enrollments", handler.GetMyEnrollments)
-			protected.GET("/submissions", handler.GetMySubmissions)
-			protected.GET("/certificates", handler.GetMyCertificates)
-
-			// Course actions
-			protected.POST("/courses/:id/enroll", handler.EnrollCourse)
-			protected.POST("/courses/:id/modules/:moduleId/complete", handler.CompleteModule)
-			protected.POST("/courses/:id/certificates", handler.GenerateCertificate)
-			protected.POST("/courses/:id/ratings", handler.CreateRating)
-			protected.GET("/courses/:id/ratings/me", handler.GetMyRating)
-			protected.POST("/assignments/:id/submit", handler.SubmitAssignment)
-			protected.POST("/quizzes/:id/submit", handler.SubmitQuiz)
-			protected.GET("/quizzes/:id/attempt", handler.GetQuizAttempt)
-
-			// Quizzes, Assignments, Questions — moved from public to protected
-			// Students need to be authenticated to view these
-			protected.GET("/courses/:id/quizzes", handler.GetQuizzes)
-			protected.GET("/courses/:id/assignments", handler.GetAssignments)
-			protected.GET("/quizzes/:id/questions", handler.GetQuestionsForStudent)
+			protected.GET("/dashboard/teacher", middleware.RequireRole("super_admin", "admin", "teacher"), handler.GetTeacherDashboard)
+			protected.POST("/learning/courses/:id/start", handler.StartCourse)
+			protected.GET("/learning/progress", handler.GetMyLearningProgress)
+			protected.GET("/learning/submissions", handler.GetMySubmissions)
+			protected.GET("/learning/certificates", handler.GetMyCertificates)
+			protected.GET("/learning/courses/:id/modules", handler.GetModules)
+			protected.GET("/learning/courses/:id/quizzes", handler.GetQuizzes)
+			protected.GET("/learning/courses/:id/assignments", handler.GetAssignments)
+			protected.POST("/learning/courses/:id/modules/:moduleId/complete", handler.CompleteModule)
+			protected.POST("/learning/courses/:id/certificates", handler.GenerateCertificate)
+			protected.POST("/learning/courses/:id/ratings", handler.CreateRating)
+			protected.GET("/learning/courses/:id/ratings/me", handler.GetMyRating)
+			protected.POST("/learning/assignments/:id/submit", handler.SubmitAssignment)
+			protected.POST("/learning/quizzes/:id/submit", handler.SubmitQuiz)
+			protected.GET("/learning/quizzes/:id/attempt", handler.GetQuizAttempt)
+			protected.GET("/learning/quizzes/:id/questions", handler.GetQuestionsForStudent)
 
 			// AI Chat (RAG-based study companion)
 			protected.POST("/chat", middleware.RateLimit("20-M"), handler.HandleChat)
 
 			// Admin/Teacher Routes
-			teacherOnly := protected.Group("/")
+			teacherOnly := protected.Group("/manage")
 			teacherOnly.Use(middleware.RequireRole("super_admin", "admin", "teacher"))
 			{
-				teacherOnly.GET("/dashboard/teacher", handler.GetTeacherDashboard)
 				teacherOnly.POST("/upload", handler.UploadFile)
+				teacherOnly.GET("/courses", handler.GetManagedCourses)
+				teacherOnly.GET("/courses/:id", handler.GetManagedCourseByID)
 				teacherOnly.POST("/courses", handler.CreateCourse)
+				teacherOnly.PUT("/courses/:id", handler.UpdateCourse)
+				teacherOnly.DELETE("/courses/:id", handler.DeleteCourse)
+				teacherOnly.GET("/courses/:id/modules", handler.GetManagedModules)
 				teacherOnly.POST("/courses/:id/modules", handler.CreateModule)
+				teacherOnly.PUT("/courses/:id/modules/order", handler.ReorderModules)
 				teacherOnly.PUT("/modules/:id", handler.UpdateModule)
 				teacherOnly.DELETE("/modules/:id", handler.DeleteModule)
+				teacherOnly.POST("/modules/:id/attachments", handler.CreateAttachment)
+				teacherOnly.DELETE("/attachments/:id", handler.DeleteAttachment)
+				teacherOnly.GET("/courses/:id/quizzes", handler.GetManagedQuizzes)
 				teacherOnly.POST("/courses/:id/quizzes", handler.CreateQuiz)
 				teacherOnly.PUT("/quizzes/:id", handler.UpdateQuiz)
 				teacherOnly.DELETE("/quizzes/:id", handler.DeleteQuiz)
+				teacherOnly.GET("/courses/:id/assignments", handler.GetManagedAssignments)
 				teacherOnly.POST("/courses/:id/assignments", handler.CreateAssignment)
 				teacherOnly.PUT("/assignments/:id", handler.UpdateAssignment)
 				teacherOnly.DELETE("/assignments/:id", handler.DeleteAssignment)
 				teacherOnly.POST("/submissions/:id/grade", handler.GradeSubmission)
-				teacherOnly.GET("/courses/:id/enrollments", handler.GetCourseEnrollments)
-				teacherOnly.GET("/submissions/teacher", handler.GetTeacherSubmissions)
+				teacherOnly.GET("/courses/:id/learners", handler.GetCourseLearners)
+				teacherOnly.GET("/submissions", handler.GetTeacherSubmissions)
 				teacherOnly.POST("/quizzes/:id/questions", handler.CreateQuestion)
 				teacherOnly.PUT("/questions/:id", handler.UpdateQuestion)
 				teacherOnly.DELETE("/questions/:id", handler.DeleteQuestion)
@@ -157,14 +181,14 @@ func main() {
 			adminOnly.Use(middleware.RequireRole("super_admin", "admin"))
 			{
 				adminOnly.GET("/dashboard/admin", handler.GetAdminDashboard)
-				adminOnly.GET("/enrollments/recent", handler.GetRecentEnrollments)
+				adminOnly.GET("/learning/recent", handler.GetRecentLearningProgress)
+				adminOnly.GET("/admin/learning-progress", handler.GetAllLearningProgress)
+				adminOnly.GET("/admin/settings", handler.GetAdminPlatformSettings)
+				adminOnly.PUT("/admin/settings", handler.UpdateAdminPlatformSettings)
 				adminOnly.GET("/users", handler.GetAllUsers)
 				adminOnly.POST("/users", handler.CreateUser)
 				adminOnly.PUT("/users/:id", handler.UpdateUser)
 				adminOnly.DELETE("/users/:id", handler.DeleteUser)
-
-				adminOnly.PUT("/courses/:id", handler.UpdateCourse)
-				adminOnly.DELETE("/courses/:id", handler.DeleteCourse)
 			}
 		}
 	}

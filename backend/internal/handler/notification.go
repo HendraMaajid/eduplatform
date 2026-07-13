@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"backend/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
 func GetNotifications(c *gin.Context) {

@@ -57,18 +57,18 @@ type seededLearning struct {
 	AssignmentsByCourse map[uuid.UUID][]model.Assignment
 }
 
-type seededEnrollments struct {
-	Enrollments  []model.Enrollment
+type seededProgress struct {
+	Progresses   []model.LearningProgress
 	Certificates []model.Certificate
 	CountByState map[string]int
 }
 
 type seedContext struct {
-	Cfg         seedConfig
-	Users       *seededUsers
-	Courses     *seededCourses
-	Learning    *seededLearning
-	Enrollments *seededEnrollments
+	Cfg      seedConfig
+	Users    *seededUsers
+	Courses  *seededCourses
+	Learning *seededLearning
+	Progress *seededProgress
 }
 
 // ─── Main Orchestrator ────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ func SeedAll() {
 		{"users", seedUsers},
 		{"courses", seedCourses},
 		{"learning", seedLearning},
-		{"enrollments", seedEnrollments},
+		{"learning_progress", seedProgress},
 		{"ratings", seedRatings},
 		{"notifications", seedNotifications},
 	}

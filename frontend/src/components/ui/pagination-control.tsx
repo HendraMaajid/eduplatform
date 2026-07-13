@@ -1,5 +1,8 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface PaginationControlProps {
   currentPage: number;
@@ -7,7 +10,12 @@ interface PaginationControlProps {
   onPageChange: (page: number) => void;
 }
 
-export function PaginationControl({ currentPage, totalPages, onPageChange }: PaginationControlProps) {
+export function PaginationControl({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: PaginationControlProps) {
+  const t = useTranslations("pagination");
   const getPages = () => {
     if (totalPages <= 7) {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -23,45 +31,52 @@ export function PaginationControl({ currentPage, totalPages, onPageChange }: Pag
 
   return (
     <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-      <Button 
-        variant="outline" 
-        size="icon" 
-        className="h-8 w-8 shrink-0" 
-        disabled={currentPage === 1} 
+      <Button
+        variant="outline"
+        size="icon"
+        className="size-8 shrink-0"
+        disabled={currentPage === 1}
         onClick={() => onPageChange(currentPage - 1)}
+        aria-label={t("previous")}
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft />
       </Button>
-      
+
       {getPages().map((page, i) => {
         if (page === "...") {
           return (
-            <div key={`ellipsis-${i}`} className="h-8 w-8 shrink-0 flex items-center justify-center text-muted-foreground">
-              <MoreHorizontal className="h-4 w-4" />
+            <div
+              key={`ellipsis-${i}`}
+              className="flex size-8 shrink-0 items-center justify-center text-muted-foreground"
+            >
+              <MoreHorizontal />
             </div>
           );
         }
         return (
-          <Button 
-            key={`page-${page}`} 
-            variant={currentPage === page ? "default" : "outline"} 
-            size="icon" 
-            className="h-8 w-8 shrink-0" 
+          <Button
+            key={`page-${page}`}
+            variant={currentPage === page ? "default" : "outline"}
+            size="icon"
+            className="size-8 shrink-0"
             onClick={() => onPageChange(page as number)}
+            aria-label={t("openPage", { page })}
+            aria-current={currentPage === page ? "page" : undefined}
           >
             {page}
           </Button>
         );
       })}
-      
-      <Button 
-        variant="outline" 
-        size="icon" 
-        className="h-8 w-8 shrink-0" 
-        disabled={currentPage === totalPages} 
+
+      <Button
+        variant="outline"
+        size="icon"
+        className="size-8 shrink-0"
+        disabled={currentPage === totalPages}
         onClick={() => onPageChange(currentPage + 1)}
+        aria-label={t("next")}
       >
-        <ChevronRight className="h-4 w-4" />
+        <ChevronRight />
       </Button>
     </div>
   );

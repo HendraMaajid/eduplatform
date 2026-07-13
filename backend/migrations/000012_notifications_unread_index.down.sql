@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS notifications_user_unread_created_idx;

@@ -29,12 +29,13 @@ func seedNotifications(ctx *seedContext) error {
 		coursesByTeacher[c.TeacherID.String()] = append(coursesByTeacher[c.TeacherID.String()], c)
 	}
 
-	// Build enrolled course titles per student
-	enrolledCoursesByStudent := map[string][]model.Course{}
-	for _, e := range ctx.Enrollments.Enrollments {
+	// Build started course titles per student.
+	startedCoursesByStudent := map[string][]model.Course{}
+	for _, progress := range ctx.Progress.Progresses {
 		for _, c := range courses {
-			if c.ID == e.CourseID {
-				enrolledCoursesByStudent[e.StudentID.String()] = append(enrolledCoursesByStudent[e.StudentID.String()], c)
+			if c.ID == progress.CourseID {
+				studentID := progress.StudentID.String()
+				startedCoursesByStudent[studentID] = append(startedCoursesByStudent[studentID], c)
 				break
 			}
 		}
@@ -45,7 +46,7 @@ func seedNotifications(ctx *seedContext) error {
 	// Student notifications
 	for _, student := range ctx.Users.Students {
 		n := randomInRange(rng, 3, 5)
-		enrolled := enrolledCoursesByStudent[student.ID.String()]
+		startedCourses := startedCoursesByStudent[student.ID.String()]
 		for i := 0; i < n; i++ {
 			tmpl := studentNotifTemplates[rng.Intn(len(studentNotifTemplates))]
 			title := tmpl.Title
@@ -53,8 +54,8 @@ func seedNotifications(ctx *seedContext) error {
 			link := tmpl.Link
 
 			// Substitute placeholders
-			if len(enrolled) > 0 {
-				c := enrolled[rng.Intn(len(enrolled))]
+			if len(startedCourses) > 0 {
+				c := startedCourses[rng.Intn(len(startedCourses))]
 				msg = strings.ReplaceAll(msg, "{courseTitle}", c.Title)
 				link = strings.ReplaceAll(link, "{courseId}", c.ID.String())
 				msg = strings.ReplaceAll(msg, "{score}", "85")

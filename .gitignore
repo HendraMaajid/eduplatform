@@ -13,6 +13,9 @@
 .DS_Store
 Thumbs.db
 
+# Local PostgreSQL safety backups
+database-backups/
+
 # Agent files
 .agents/
 skills-lock.json

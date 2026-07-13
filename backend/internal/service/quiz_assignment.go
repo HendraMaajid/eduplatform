@@ -14,13 +14,42 @@ import (
 	"backend/pkg/database"
 )
 
-var ErrNotEnrolled = errors.New("student not enrolled in this course")
-
 // Quizzes
 func GetQuizzesByCourse(ctx context.Context, courseID string) ([]model.Quiz, error) {
 	var quizzes []model.Quiz
+	err := database.DB.WithContext(ctx).Joins("JOIN courses ON courses.id = quizzes.course_id").
+		Where("quizzes.course_id = ? AND quizzes.is_published = true AND courses.status = 'published' AND courses.deleted_at IS NULL", courseID).Find(&quizzes).Error
+	return quizzes, err
+}
+
+func GetManagedQuizzesByCourse(ctx context.Context, courseID string) ([]model.Quiz, error) {
+	var quizzes []model.Quiz
 	err := database.DB.WithContext(ctx).Preload("Questions").Where("course_id = ?", courseID).Find(&quizzes).Error
 	return quizzes, err
+}
+
+func AuthorizeQuizManagement(ctx context.Context, quizID, userID, role string) error {
+	var quiz model.Quiz
+	if err := database.DB.WithContext(ctx).Select("course_id").First(&quiz, "id = ?", quizID).Error; err != nil {
+		return err
+	}
+	return AuthorizeCourseManagement(ctx, quiz.CourseID.String(), userID, role)
+}
+
+func AuthorizeAssignmentManagement(ctx context.Context, assignmentID, userID, role string) error {
+	var assignment model.Assignment
+	if err := database.DB.WithContext(ctx).Select("course_id").First(&assignment, "id = ?", assignmentID).Error; err != nil {
+		return err
+	}
+	return AuthorizeCourseManagement(ctx, assignment.CourseID.String(), userID, role)
+}
+
+func AuthorizeQuestionManagement(ctx context.Context, questionID, userID, role string) error {
+	var question model.Question
+	if err := database.DB.WithContext(ctx).Select("quiz_id").First(&question, "id = ?", questionID).Error; err != nil {
+		return err
+	}
+	return AuthorizeQuizManagement(ctx, question.QuizID.String(), userID, role)
 }
 
 func CreateQuiz(ctx context.Context, courseID string, req dto.CreateQuizRequest) (*model.Quiz, error) {
@@ -35,7 +64,7 @@ func CreateQuiz(ctx context.Context, courseID string, req dto.CreateQuizRequest)
 		Description:  req.Description,
 		PassingScore: req.PassingScore,
 		TimeLimit:    req.TimeLimit,
-		IsPublished:  false,
+		IsPublished:  req.IsPublished,
 	}
 
 	if err := database.DB.WithContext(ctx).Create(&quiz).Error; err != nil {
@@ -65,8 +94,14 @@ func UpdateQuiz(ctx context.Context, id string, req dto.UpdateQuizRequest) (*mod
 	if req.TimeLimit != 0 {
 		updates["time_limit"] = req.TimeLimit
 	}
+	if req.IsPublished != nil {
+		updates["is_published"] = *req.IsPublished
+	}
 
 	if err := db.Model(&quiz).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if err := db.First(&quiz, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 
@@ -107,21 +142,17 @@ func SubmitQuiz(ctx context.Context, studentID string, quizID string, req dto.Su
 
 	// Fetch quiz and its questions
 	var quiz model.Quiz
-	if err := db.Select("id", "course_id", "passing_score").
+	if err := db.Select("quizzes.id", "quizzes.course_id", "quizzes.passing_score").
+		Joins("JOIN courses ON courses.id = quizzes.course_id").
 		Preload("Questions", func(query *gorm.DB) *gorm.DB {
 			return query.Select("id", "quiz_id", "correct_answer", "points")
 		}).
-		Where("id = ?", parsedQuizID).
+		Where("quizzes.id = ? AND quizzes.is_published = true AND courses.status = 'published'", parsedQuizID).
 		First(&quiz).Error; err != nil {
 		return nil, err
 	}
 
-	var enrollment model.Enrollment
-	if err := db.Where("student_id = ? AND course_id = ? AND status = ?", parsedStudentID, quiz.CourseID, "active").
-		First(&enrollment).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotEnrolled
-		}
+	if _, err := StartCourse(ctx, studentID, quiz.CourseID.String()); err != nil {
 		return nil, err
 	}
 
@@ -180,6 +211,8 @@ func SubmitQuiz(ctx context.Context, studentID string, quizID string, req dto.Su
 		percentage = (attempt.Score * 100) / attempt.TotalPoints
 	}
 	currentPassed := percentage >= quiz.PassingScore
+	attempt.Score = percentage
+	attempt.TotalPoints = 100
 	attempt.Passed = currentPassed
 
 	// Save everything in a single transaction
@@ -196,8 +229,8 @@ func SubmitQuiz(ctx context.Context, studentID string, quizID string, req dto.Su
 			tx.Rollback()
 			return nil, err
 		}
-		existingAttempt.Score = attempt.Score
-		existingAttempt.TotalPoints = attempt.TotalPoints
+		existingAttempt.Score = max(existingAttempt.Score, attempt.Score)
+		existingAttempt.TotalPoints = 100
 		existingAttempt.Passed = existingAttempt.Passed || currentPassed
 		existingAttempt.CompletedAt = now
 		if err := tx.Save(&existingAttempt).Error; err != nil {
@@ -223,19 +256,30 @@ func SubmitQuiz(ctx context.Context, studentID string, quizID string, req dto.Su
 			return nil, err
 		}
 	}
+	attempt.Answers = answers
+	if alreadyAttempted {
+		existingAttempt.Answers = answers
+	}
 
 	if err := tx.Commit().Error; err != nil {
 		return nil, err
 	}
 
-	// Recalculate enrollment progress
+	// Recalculate learning progress.
 	if currentPassed && !wasPassed {
-		previousProgress := enrollment.Progress
-		recalculateProgress(studentID, quiz.CourseID.String(), &enrollment)
-		if enrollment.Progress != previousProgress {
-			if err := db.Save(&enrollment).Error; err != nil {
+		var progress model.LearningProgress
+		if err := db.Where("student_id = ? AND course_id = ?", parsedStudentID, quiz.CourseID).First(&progress).Error; err != nil {
+			return nil, err
+		}
+		previousProgress := progress.Progress
+		if err := recalculateProgress(ctx, studentID, quiz.CourseID.String(), &progress); err != nil {
+			return nil, err
+		}
+		if progress.Progress != previousProgress {
+			if err := db.Save(&progress).Error; err != nil {
 				return nil, err
 			}
+			AppCache.InvalidatePrefix("dashboard:")
 		}
 	}
 
@@ -257,6 +301,13 @@ func GetQuizAttempt(ctx context.Context, studentID string, quizID string) (*mode
 
 // Assignments
 func GetAssignmentsByCourse(ctx context.Context, courseID string) ([]model.Assignment, error) {
+	var assignments []model.Assignment
+	err := database.DB.WithContext(ctx).Joins("JOIN courses ON courses.id = assignments.course_id").
+		Where("assignments.course_id = ? AND assignments.is_published = true AND courses.status = 'published' AND courses.deleted_at IS NULL", courseID).Find(&assignments).Error
+	return assignments, err
+}
+
+func GetManagedAssignmentsByCourse(ctx context.Context, courseID string) ([]model.Assignment, error) {
 	var assignments []model.Assignment
 	err := database.DB.WithContext(ctx).Where("course_id = ?", courseID).Find(&assignments).Error
 	return assignments, err
@@ -280,7 +331,7 @@ func CreateAssignment(ctx context.Context, courseID string, req dto.CreateAssign
 		Instructions: req.Instructions,
 		Deadline:     deadline,
 		MaxScore:     req.MaxScore,
-		IsPublished:  false,
+		IsPublished:  req.IsPublished,
 	}
 
 	if err := database.DB.WithContext(ctx).Create(&assignment).Error; err != nil {
@@ -315,8 +366,14 @@ func UpdateAssignment(ctx context.Context, id string, req dto.UpdateAssignmentRe
 	if req.MaxScore != 0 {
 		updates["max_score"] = req.MaxScore
 	}
+	if req.IsPublished != nil {
+		updates["is_published"] = *req.IsPublished
+	}
 
 	if err := db.Model(&assignment).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if err := db.First(&assignment, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 
@@ -337,6 +394,16 @@ func DeleteAssignment(ctx context.Context, id string) error {
 func GetQuestionsByQuiz(ctx context.Context, quizID string) ([]model.Question, error) {
 	var questions []model.Question
 	err := database.DB.WithContext(ctx).Where("quiz_id = ?", quizID).Order(`"order" ASC`).Find(&questions).Error
+	return questions, err
+}
+
+func GetPublishedQuestionsByQuiz(ctx context.Context, quizID string) ([]model.Question, error) {
+	var questions []model.Question
+	err := database.DB.WithContext(ctx).Model(&model.Question{}).
+		Joins("JOIN quizzes ON quizzes.id = questions.quiz_id").
+		Joins("JOIN courses ON courses.id = quizzes.course_id").
+		Where("questions.quiz_id = ? AND quizzes.is_published = true AND courses.status = 'published'", quizID).
+		Order(`questions."order" ASC`).Find(&questions).Error
 	return questions, err
 }
 

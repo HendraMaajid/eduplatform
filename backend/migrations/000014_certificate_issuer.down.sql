@@ -1,0 +1,2 @@
+ALTER TABLE certificates
+DROP COLUMN IF EXISTS issuer;

@@ -4,187 +4,154 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { api } from "@/lib/api";
-import { GraduationCap, Loader2, UserPlus } from "lucide-react";
+import type { User } from "@/lib/types";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [fullName, setFullName] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [error, setError] = useState("");
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (name.trim().length < 2) return setError("Nama minimal 2 karakter.");
+    if (password.length < 8) return setError("Password minimal 8 karakter.");
+    if (password !== confirmPassword) return setError("Konfirmasi password belum sama.");
     setLoading(true);
-    setErrorMsg("");
-    setSuccessMsg("");
-
-    const trimmedName = fullName.trim();
-
-    if (!trimmedName) {
-      setErrorMsg("Nama lengkap wajib diisi.");
-      setLoading(false);
-      return;
-    }
-
-    if (!email.trim()) {
-      setErrorMsg("Email wajib diisi.");
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMsg("Password minimal 6 karakter.");
-      setLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMsg("Konfirmasi password tidak sama.");
-      setLoading(false);
-      return;
-    }
-
     try {
-      await api.post("/auth/register", {
-        name: trimmedName,
-        email,
+      await api.post<{ user: User }>("/auth/register", {
+        name: name.trim(),
+        email: email.trim(),
         password,
       });
-
-      const loginResult = await signIn("credentials", {
-        email,
+      const result = await signIn("credentials", {
+        email: email.trim(),
         password,
         redirect: false,
       });
-
-      if (loginResult?.error) {
-        setSuccessMsg("Akun berhasil dibuat. Silakan login untuk masuk.");
-        return;
-      }
-
+      if (result?.error)
+        throw new Error("Akun dibuat. Silakan masuk menggunakan email dan password.");
       router.push("/dashboard");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal mendaftar.";
-      setErrorMsg(message);
-    } finally {
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Pendaftaran gagal.");
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/15 rounded-full blur-[100px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-violet-500/15 rounded-full blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-[120px]" />
-      </div>
-
-      <div className="w-full max-w-md mx-4">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl gradient-primary flex items-center justify-center shadow-xl shadow-primary/25">
-              <GraduationCap className="h-7 w-7 text-white" />
-            </div>
-            <span className="text-3xl font-extrabold gradient-text">EduPlatform</span>
-          </Link>
-        </div>
-
-        <Card className="border-0 shadow-2xl glass-card">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-xl">Buat Akun Baru</CardTitle>
-            <CardDescription>Lengkapi data untuk mulai belajar</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <form onSubmit={handleRegister} className="space-y-4">
-              {errorMsg && (
-                <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-md">
-                  {errorMsg}
-                </div>
-              )}
-              {successMsg && (
-                <div className="p-3 text-sm text-emerald-600 bg-emerald-500/10 rounded-md">
-                  {successMsg}
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Nama lengkap</Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="Nama kamu"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="nama@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="********"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Konfirmasi password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="********"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full gradient-primary text-white gap-2"
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UserPlus className="h-4 w-4" />
-                )}
-                {loading ? "Memproses..." : "Daftar"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Sudah punya akun?{" "}
-          <Link href="/login" className="text-primary hover:underline">
-            Masuk di sini
-          </Link>
-        </p>
-      </div>
-    </div>
+    <AuthShell
+      title="Buat akun gratis"
+      description="Daftar sebagai siswa dan langsung akses semua course published."
+    >
+      <Button
+        variant="outline"
+        className="h-11 w-full border-2"
+        disabled={googleLoading}
+        onClick={() => {
+          setGoogleLoading(true);
+          void signIn("google", { callbackUrl: "/dashboard" });
+        }}
+      >
+        {googleLoading ? (
+          <Loader2 className="animate-spin" />
+        ) : (
+          <span className="grid size-5 place-items-center rounded-full border font-bold text-[#4285f4]">
+            G
+          </span>
+        )}{" "}
+        Daftar dengan Google
+      </Button>
+      <FieldSeparator className="my-6">atau daftar dengan email</FieldSeparator>
+      <form onSubmit={handleSubmit} noValidate>
+        <FieldGroup>
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <Field>
+            <FieldLabel htmlFor="name">Nama lengkap</FieldLabel>
+            <Input
+              id="name"
+              autoComplete="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Nama kamu"
+              className="h-11"
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="nama@email.com"
+              className="h-11"
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="h-11"
+              required
+              minLength={8}
+            />
+            <FieldDescription>Gunakan minimal 8 karakter.</FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="confirm-password">Ulangi password</FieldLabel>
+            <Input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              className="h-11"
+              required
+            />
+          </Field>
+          <Button type="submit" className="h-11 w-full playful-shadow" disabled={loading}>
+            {loading && <Loader2 className="animate-spin" />}
+            {loading ? "Membuat akun..." : "Buat akun & mulai belajar"}
+          </Button>
+        </FieldGroup>
+      </form>
+      <p className="mt-7 text-center text-sm text-muted-foreground">
+        Sudah punya akun?{" "}
+        <Link href="/login" className="font-bold text-primary hover:underline">
+          Masuk
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

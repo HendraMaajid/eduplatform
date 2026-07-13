@@ -29,8 +29,6 @@ func main() {
 
 	prefix := envString("EMAIL_PREFIX", "loadtest_student_")
 	domain := envString("EMAIL_DOMAIN", "example.com")
-	status := envString("ENROLL_STATUS", "active")
-	paymentAmount := envInt("PAYMENT_AMOUNT", 0)
 
 	database.InitDB()
 
@@ -59,28 +57,28 @@ func main() {
 	}
 
 	now := time.Now()
-	enrollments := make([]model.Enrollment, 0, len(students))
+	progresses := make([]model.LearningProgress, 0, len(students))
 	for _, student := range students {
-		enrollments = append(enrollments, model.Enrollment{
+		progresses = append(progresses, model.LearningProgress{
 			StudentID:        student.ID,
 			CourseID:         course.ID,
-			PaymentAmount:    paymentAmount,
 			Progress:         0,
 			CompletedModules: model.StringArray{},
-			Status:           status,
-			EnrolledAt:       now,
+			Status:           "in_progress",
+			StartedAt:        now,
+			LastAccessedAt:   now,
 		})
 	}
 
 	result := database.DB.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "student_id"}, {Name: "course_id"}},
 		DoNothing: true,
-	}).CreateInBatches(enrollments, 200)
+	}).CreateInBatches(progresses, 200)
 	if result.Error != nil {
-		log.Fatalf("Failed to create enrollments: %v", result.Error)
+		log.Fatalf("Failed to create learning progress: %v", result.Error)
 	}
 
-	log.Printf("Enrollments created: %d (duplicates ignored)", result.RowsAffected)
+	log.Printf("Learning progress rows created: %d (duplicates ignored)", result.RowsAffected)
 }
 
 func envString(key string, fallback string) string {
@@ -96,11 +94,9 @@ func envInt(key string, fallback int) int {
 	if value == "" {
 		return fallback
 	}
-
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return fallback
 	}
-
 	return parsed
 }

@@ -1,9 +1,11 @@
 export type UserRole = "super_admin" | "admin" | "teacher" | "student";
 export type CourseLevel = "beginner" | "intermediate" | "advanced";
 export type CourseStatus = "draft" | "published" | "archived";
-export type EnrollmentStatus = "active" | "completed" | "certified";
+export type LearningStatus = "in_progress" | "completed" | "certified";
 export type SubmissionStatus = "submitted" | "graded" | "passed" | "failed";
 export type QuestionType = "multiple_choice" | "short_answer";
+export type Locale = "id" | "en";
+export type ThemePreference = "light" | "dark" | "system";
 
 export interface PaginationMeta {
   total: number;
@@ -13,7 +15,7 @@ export interface PaginationMeta {
 }
 
 export interface PaginatedResponse<T> {
-  data: T;
+  data: T[];
   meta: PaginationMeta;
 }
 
@@ -25,6 +27,7 @@ export interface User {
   role: UserRole;
   bio?: string;
   phone?: string;
+  hasPassword?: boolean;
   createdAt: string;
 }
 
@@ -35,12 +38,11 @@ export interface Course {
   description: string;
   shortDescription: string;
   thumbnail: string;
-  price: number;
   category: string;
   level: CourseLevel;
   status: CourseStatus;
   teacherId: string;
-  teacher?: User;
+  teacher?: Pick<User, "id" | "name" | "avatar" | "bio">;
   totalModules: number;
   totalQuizzes: number;
   totalAssignments: number;
@@ -49,6 +51,20 @@ export interface Course {
   totalReviews: number;
   duration: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CourseCategory {
+  name: string;
+  count: number;
+}
+
+export interface Attachment {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  type: string;
 }
 
 export interface Module {
@@ -63,12 +79,15 @@ export interface Module {
   attachments: Attachment[];
 }
 
-export interface Attachment {
+export interface Question {
   id: string;
-  name: string;
-  url: string;
-  size: number;
-  type: string;
+  quizId?: string;
+  type: QuestionType;
+  text: string;
+  options?: string[];
+  correctAnswer?: string;
+  points: number;
+  order: number;
 }
 
 export interface Quiz {
@@ -76,22 +95,19 @@ export interface Quiz {
   courseId: string;
   title: string;
   description: string;
-  questions: Question[];
+  questions?: Question[];
   passingScore: number;
   timeLimit: number;
   isPublished: boolean;
-  totalAttempts: number;
-  averageScore: number;
+  totalAttempts?: number;
+  averageScore?: number;
 }
 
-export interface Question {
-  id: string;
-  type: QuestionType;
-  text: string;
-  options?: string[];
-  correctAnswer: string;
-  points: number;
-  order: number;
+export interface QuizAnswer {
+  questionId: string;
+  answer: string;
+  isCorrect?: boolean;
+  points?: number;
 }
 
 export interface QuizAttempt {
@@ -106,23 +122,17 @@ export interface QuizAttempt {
   completedAt: string;
 }
 
-export interface QuizAnswer {
-  questionId: string;
-  answer: string;
-  isCorrect: boolean;
-  points: number;
-}
-
 export interface Assignment {
   id: string;
   courseId: string;
+  course?: Course;
   title: string;
   description: string;
   instructions: string;
   deadline: string;
   maxScore: number;
   isPublished: boolean;
-  totalSubmissions: number;
+  totalSubmissions?: number;
 }
 
 export interface Submission {
@@ -140,26 +150,21 @@ export interface Submission {
   submittedAt: string;
 }
 
-export interface Enrollment {
+export interface LearningProgress {
   id: string;
   courseId: string;
   course?: Course;
   studentId: string;
   student?: User;
-  paymentAmount: number;
-  progress: number;
   completedModules: string[];
-  status: EnrollmentStatus;
-  enrolledAt: string;
-}
-
-export interface Payment {
-  id: string;
-  courseId: string;
-  course?: Course;
-  studentId: string;
-  amount: number;
-  paidAt: string;
+  progress: number;
+  status: LearningStatus;
+  lastModuleId?: string;
+  lastModule?: Module;
+  startedAt: string;
+  lastAccessedAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Certificate {
@@ -169,6 +174,7 @@ export interface Certificate {
   courseId: string;
   course?: Course;
   certificateNumber: string;
+  issuer: string;
   issuedAt: string;
 }
 
@@ -183,46 +189,73 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface PlatformSettings {
+  id: number;
+  name: string;
+  descriptionId: string;
+  descriptionEn: string;
+  supportEmail: string;
+  logoUrl: string;
+  defaultLocale: Locale;
+  certificateIssuer: string;
+  notifyNewRegistration: boolean;
+  notifyNewSubmission: boolean;
+  notifyGradePublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserPreference {
+  userId: string;
+  locale: Locale;
+  theme: ThemePreference;
+  notifyCourseUpdates: boolean;
+  notifyAssignments: boolean;
+  notifyGrades: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AdminStats {
   totalCourses: number;
   totalStudents: number;
   totalTeachers: number;
-  totalRevenue: number;
-  coursesTrend: number;
-  studentsTrend: number;
-  revenueTrend: number;
-  monthlyRevenue: ChartData[];
-  coursesByCategory: ChartData[];
+  activeLearners: number;
+  completedLearnings: number;
+  certificatesIssued: number;
+  weeklyActivity: Array<{
+    week: string;
+    activeLearners: number;
+    completedModules: number;
+  }>;
+  progressBreakdown: Array<{
+    status: LearningStatus;
+    total: number;
+  }>;
 }
 
 export interface TeacherStats {
   totalCourses: number;
   totalStudents: number;
   pendingSubmissions: number;
-  averageRating: number;
-  recentSubmissions: Submission[];
+  averageRating?: number;
 }
 
 export interface StudentStats {
-  enrolledCourses: number;
+  startedCourses: number;
   completedCourses: number;
   certificates: number;
-  averageScore: number;
-  currentCourses: Enrollment[];
   upcomingDeadlines: Assignment[];
+  recentActivities: Array<{
+    id: string;
+    title: string;
+    type: "assignment" | "quiz" | "course";
+    createdAt: string;
+  }>;
 }
 
-export interface ChartData {
-  name: string;
-  value: number;
-  [key: string]: string | number;
-}
-
-export interface NavItem {
-  title: string;
-  titleEn: string;
-  href: string;
-  icon: string;
-  badge?: number;
-  children?: NavItem[];
+export interface AuthResponse {
+  token: string;
+  refresh_token: string;
+  user: User;
 }

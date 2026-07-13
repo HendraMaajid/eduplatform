@@ -1,570 +1,406 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  BookOpen, FileText, HelpCircle, FolderGit2,
-  CheckCircle2, Circle, Play, Clock, ArrowLeft,
-  ChevronRight, Lock, Loader2, RotateCcw, Trophy, XCircle, Star
-} from "lucide-react";
+import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { stripHtml, RichContent } from "@/lib/html-utils";
-import AIChatWidget from "@/components/dashboard/AIChatWidget";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  Download,
+  FileText,
+  Trophy,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { durationAmount } from "@/lib/duration";
+import { RichContent } from "@/lib/html-utils";
+import { isImageResource, resourceUrl } from "@/lib/resource-url";
+import type { Assignment, Certificate, Course, LearningProgress, Module, Quiz } from "@/lib/types";
+import {
+  CourseOutlineNavigation,
+  type LearningOutlineItem,
+} from "@/components/learning/course-outline-list";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { PaginationControl } from "@/components/ui/pagination-control";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function StudentCourseDetailPage() {
-  const params = useParams();
-  const courseId = params.id as string;
-  
-  const [course, setCourse] = useState<any>(null);
-  const [modules, setModules] = useState<any[]>([]);
-  const [quizzes, setQuizzes] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [enrollment, setEnrollment] = useState<any>(null);
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [quizAttempts, setQuizAttempts] = useState<Record<string, any>>({});
-  
-  const [selectedModule, setSelectedModule] = useState("");
-  const [myRating, setMyRating] = useState<{ score: number; review: string } | null>(null);
-  const [ratings, setRatings] = useState<any[]>([]);
-  const [ratingScore, setRatingScore] = useState(0);
-  const [ratingReview, setRatingReview] = useState("");
-  const [submittingRating, setSubmittingRating] = useState(false);
+const ATTACHMENTS_PER_PAGE = 5;
+
+function formatBytes(size: number, unavailable: string) {
+  if (!size) return unavailable;
+  if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export default function CoursePlayerPage() {
+  const t = useTranslations("coursePlayer");
+  const { id } = useParams<{ id: string }>();
+  const [course, setCourse] = useState<Course | null>(null);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [progress, setProgress] = useState<LearningProgress | null>(null);
+  const [current, setCurrent] = useState<Module | null>(null);
+  const [attachmentPage, setAttachmentPage] = useState(1);
+  const [failedCoverUrls, setFailedCoverUrls] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    const fetchCourseData = async () => {
-      try {
-        const [courseData, modulesData, quizzesData, assignmentsData, submissionsData, enrollmentsData] = await Promise.all([
-          api.get(`/courses/${courseId}`),
-          api.get(`/courses/${courseId}/modules`),
-          api.get(`/courses/${courseId}/quizzes`).catch(() => []), // Ignore error if not implemented
-          api.get(`/courses/${courseId}/assignments`).catch(() => []),
-          api.get(`/submissions`).catch(() => []),
-          api.get(`/enrollments`).catch(() => []),
-        ]);
-        
-        setCourse(courseData);
-        setModules(modulesData || []);
-        setQuizzes(quizzesData || []);
-        setAssignments(assignmentsData || []);
-        setSubmissions(submissionsData || []);
-        
-        if (enrollmentsData && Array.isArray(enrollmentsData)) {
-          const courseEnrollment = enrollmentsData.find(e => e.courseId === courseId);
-          setEnrollment(courseEnrollment);
-        }
-        
-        if (modulesData && modulesData.length > 0) {
-          setSelectedModule(modulesData[0].id);
-        }
+    Promise.all([
+      api.get<Course>(`/courses/${id}`),
+      api.post<LearningProgress>(`/learning/courses/${id}/start`),
+      api.get<Module[]>(`/learning/courses/${id}/modules`),
+      api.get<Quiz[]>(`/learning/courses/${id}/quizzes`),
+      api.get<Assignment[]>(`/learning/courses/${id}/assignments`),
+    ])
+      .then(([loadedCourse, loadedProgress, loadedModules, loadedQuizzes, loadedAssignments]) => {
+        setCourse(loadedCourse);
+        setProgress(loadedProgress);
+        setModules(loadedModules);
+        setQuizzes(loadedQuizzes);
+        setAssignments(loadedAssignments);
+        setCurrent(
+          loadedModules.find((module) => module.id === loadedProgress.lastModuleId) ||
+            loadedModules[0] ||
+            null,
+        );
+      })
+      .catch((cause) => toast.error(cause instanceof Error ? cause.message : t("loadError")));
+  }, [id, t]);
 
-        // Fetch quiz attempts for each quiz
-        if (quizzesData && Array.isArray(quizzesData)) {
-          const attemptsMap: Record<string, any> = {};
-          await Promise.all(
-            quizzesData.map(async (quiz: any) => {
-              try {
-                const attempt = await api.get(`/quizzes/${quiz.id}/attempt`);
-                if (attempt) attemptsMap[quiz.id] = attempt;
-              } catch {
-                // No attempt yet
-              }
-            })
-          );
-          setQuizAttempts(attemptsMap);
-        }
-
-        // Fetch ratings
-        try {
-          const [ratingsData, myRatingData] = await Promise.all([
-            api.get(`/courses/${courseId}/ratings`),
-            api.get(`/courses/${courseId}/ratings/me`).catch(() => null),
-          ]);
-          setRatings(ratingsData || []);
-          if (myRatingData) {
-            setMyRating(myRatingData);
-            setRatingScore(myRatingData.score);
-            setRatingReview(myRatingData.review || "");
-          }
-        } catch {
-          // Ratings not available yet
-        }
-      } catch (error) {
-        console.error("Failed to fetch course details", error);
-      } finally {
-        setLoading(false);
+  const outline = useMemo(() => {
+    const items: LearningOutlineItem[] = [];
+    const count = Math.max(modules.length, quizzes.length, assignments.length);
+    for (let index = 0; index < count; index += 1) {
+      const learningModule = modules[index];
+      const quiz = quizzes[index];
+      const assignment = assignments[index];
+      if (learningModule) {
+        items.push({
+          type: "module",
+          id: learningModule.id,
+          title: learningModule.title,
+          subtitle: t("moduleOutline", {
+            order: learningModule.order,
+            duration: durationAmount(learningModule.duration)
+              ? t("hours", { count: Number(durationAmount(learningModule.duration)) })
+              : t("selfPaced"),
+          }),
+          module: learningModule,
+        });
       }
-    };
-    
-    fetchCourseData();
-  }, [courseId]);
+      if (quiz) {
+        items.push({
+          type: "quiz",
+          id: quiz.id,
+          title: quiz.title,
+          subtitle: t("quizOutline", { minutes: quiz.timeLimit }),
+          quiz,
+        });
+      }
+      if (assignment) {
+        items.push({
+          type: "assignment",
+          id: assignment.id,
+          title: assignment.title,
+          subtitle: t("assignmentOutline", { points: assignment.maxScore }),
+          assignment,
+        });
+      }
+    }
+    return items;
+  }, [assignments, modules, quizzes, t]);
 
-  const currentModule = modules.find((m) => m.id === selectedModule);
-  
-  const completedModules: string[] = enrollment?.completedModules || []; 
-  const progress = enrollment?.progress || 0;
+  const currentIndex = outline.findIndex(
+    (item) => item.type === "module" && item.id === current?.id,
+  );
+  const completedModuleIds = useMemo(
+    () => new Set(progress?.completedModules || []),
+    [progress?.completedModules],
+  );
+  const previousItem = currentIndex > 0 ? outline[currentIndex - 1] : null;
+  const nextItem = currentIndex >= 0 ? outline[currentIndex + 1] || null : null;
+  const imageAttachments = current?.attachments?.filter((item) =>
+    isImageResource(item.name, item.type),
+  );
+  const coverImage = [...(imageAttachments?.map((item) => item.url) || []), course?.thumbnail || ""]
+    .filter(Boolean)
+    .find((url) => !failedCoverUrls.has(url));
+  const attachments = current?.attachments || [];
+  const attachmentPages = Math.ceil(attachments.length / ATTACHMENTS_PER_PAGE);
+  const visibleAttachments = attachments.slice(
+    (attachmentPage - 1) * ATTACHMENTS_PER_PAGE,
+    attachmentPage * ATTACHMENTS_PER_PAGE,
+  );
 
-  const handleCompleteModule = async (moduleId: string) => {
+  async function complete(moduleId: string) {
     try {
-      const updatedEnrollment = await api.post(`/courses/${courseId}/modules/${moduleId}/complete`, {});
-      setEnrollment(updatedEnrollment);
-    } catch (error) {
-      console.error("Gagal menandai modul selesai", error);
+      const updated = await api.post<LearningProgress>(
+        `/learning/courses/${id}/modules/${moduleId}/complete`,
+        {},
+      );
+      setProgress(updated);
+      toast.success(t("moduleCompleted"));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : t("progressSaveError"));
     }
-  };
+  }
 
-  const handleSubmitRating = async () => {
-    if (ratingScore === 0) {
-      toast.error("Pilih rating terlebih dahulu");
-      return;
-    }
-    setSubmittingRating(true);
+  async function certificate() {
     try {
-      const result = await api.post(`/courses/${courseId}/ratings`, {
-        score: ratingScore,
-        review: ratingReview,
-      });
-      setMyRating(result);
-      toast.success("Rating berhasil disimpan!");
-      // Refresh ratings list
-      const ratingsData = await api.get(`/courses/${courseId}/ratings`);
-      setRatings(ratingsData || []);
-    } catch (err: any) {
-      toast.error(err.message || "Gagal menyimpan rating");
-    } finally {
-      setSubmittingRating(false);
+      await api.post<Certificate>(`/learning/courses/${id}/certificates`, {});
+      toast.success(t("certificateIssued"));
+      setProgress((value) => (value ? { ...value, status: "certified" } : value));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : t("requirementsNotMet"));
     }
-  };
+  }
 
-  if (loading) {
+  function selectModule(module: Module) {
+    setCurrent(module);
+    setAttachmentPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function renderItemAction(item: LearningOutlineItem | null, direction: "previous" | "next") {
+    if (!item) return null;
+    const label =
+      direction === "previous"
+        ? t("previous")
+        : item.type === "quiz"
+          ? t("continueQuiz")
+          : item.type === "assignment"
+            ? t("continueAssignment")
+            : t("nextMaterial");
+    const icon =
+      direction === "previous" ? (
+        <ArrowLeft data-icon="inline-start" />
+      ) : (
+        <ArrowRight data-icon="inline-end" />
+      );
+    if (item.type === "module") {
+      return (
+        <Button
+          variant={direction === "previous" ? "outline" : "default"}
+          onClick={() => selectModule(item.module)}
+        >
+          {direction === "previous" ? icon : null}
+          {label}
+          {direction === "next" ? icon : null}
+        </Button>
+      );
+    }
+    const href =
+      item.type === "quiz"
+        ? `/dashboard/student/courses/${id}/quiz/${item.id}`
+        : `/dashboard/student/courses/${id}/assignments/${item.id}`;
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <Button variant={direction === "previous" ? "outline" : "default"} asChild>
+        <Link href={href}>
+          {direction === "previous" ? icon : null}
+          {label}
+          {direction === "next" ? icon : null}
+        </Link>
+      </Button>
     );
   }
 
-  if (!course) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground">Kursus tidak ditemukan</p>
-      </div>
-    );
-  }
+  if (!course || !progress) return <Skeleton className="h-[75vh]" />;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/student/courses"><ArrowLeft className="h-4 w-4" /></Link>
+    <div className="flex flex-col gap-6">
+      <div>
+        <Button variant="ghost" asChild>
+          <Link href="/dashboard/student/courses">
+            <ArrowLeft data-icon="inline-start" />
+            {t("backToProgress")}
+          </Link>
         </Button>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold tracking-tight">{course.title}</h1>
-          <p className="text-sm text-muted-foreground">oleh {course.teacher?.name || "Pengajar"}</p>
-        </div>
-        <div className="hidden sm:flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Progress:</span>
-            <Progress value={progress} className="w-32 h-2" />
-            <span className="text-sm font-medium">{progress}%</span>
+        <div className="mt-4 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">{course.title}</h1>
+            <p className="mt-2 text-muted-foreground">{course.teacher?.name || t("teacherTeam")}</p>
           </div>
-          {enrollment && enrollment.status === "active" && progress >= 100 && (
-            <Button
-              size="sm"
-              className="gradient-primary text-white shadow-md shadow-primary/20"
-              onClick={async () => {
-                try {
-                  await api.post(`/courses/${courseId}/certificates`, {});
-                  toast.success("Sertifikat berhasil diterbitkan! 🎉");
-                  // Re-fetch enrollment data silently
-                  const enrollmentsData = await api.get("/enrollments");
-                  if (Array.isArray(enrollmentsData)) {
-                    const updated = enrollmentsData.find((e: any) => e.courseId === courseId);
-                    setEnrollment(updated);
-                  }
-                } catch (err: any) {
-                  toast.error(err.message || "Gagal menerbitkan sertifikat");
-                }
-              }}
-            >
-              Klaim Sertifikat
-            </Button>
-          )}
-          {enrollment?.status === "certified" && (
-            <Button size="sm" variant="outline" className="gap-2 border-amber-500 text-amber-600 hover:bg-amber-50" asChild>
-              <Link href="/dashboard/student/certificates">
-                Lihat Sertifikat
-              </Link>
-            </Button>
-          )}
+          <div className="w-full max-w-sm">
+            <div className="mb-2 flex justify-between text-sm">
+              <span className="text-muted-foreground">{t("courseProgress")}</span>
+              <b>{progress.progress}%</b>
+            </div>
+            <Progress value={progress.progress} />
+          </div>
         </div>
       </div>
 
-      <Tabs defaultValue="modules">
-        <TabsList>
-          <TabsTrigger value="modules" className="gap-1.5"><FileText className="h-3 w-3" /> Materi ({modules.length})</TabsTrigger>
-          <TabsTrigger value="quizzes" className="gap-1.5"><HelpCircle className="h-3 w-3" /> Kuis ({quizzes.length})</TabsTrigger>
-          <TabsTrigger value="assignments" className="gap-1.5"><FolderGit2 className="h-3 w-3" /> Tugas ({assignments.length})</TabsTrigger>
-          <TabsTrigger value="ratings" className="gap-1.5"><Star className="h-3 w-3" /> Rating</TabsTrigger>
-        </TabsList>
-
-        {/* Modules Tab */}
-        <TabsContent value="modules" className="mt-4">
-          <div className="grid lg:grid-cols-[300px_1fr] gap-6">
-            {/* Module List Sidebar */}
-            <Card className="border-0 shadow-md h-fit">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Daftar Modul</CardTitle>
-              </CardHeader>
-              <CardContent className="p-2">
-                <ScrollArea className="h-[500px]">
-                  {modules.length === 0 && (
-                    <p className="text-sm text-muted-foreground p-3 text-center">Belum ada modul</p>
-                  )}
-                  {modules.map((mod, idx) => {
-                    const isCompleted = completedModules.includes(mod.id);
-                    const isActive = selectedModule === mod.id;
-                    const isLocked = false; // Mocked logic: all unlocked for now
-                    return (
-                      <button
-                        key={mod.id}
-                        onClick={() => !isLocked && setSelectedModule(mod.id)}
-                        disabled={isLocked}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
-                          isActive ? "bg-primary/10 border border-primary/30" : "hover:bg-accent/50"
-                        } ${isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                      >
-                        <div className="shrink-0">
-                          {isLocked ? (
-                            <Lock className="h-4 w-4 text-muted-foreground" />
-                          ) : isCompleted ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          ) : (
-                            <Circle className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium truncate ${isActive ? "text-primary" : ""}`}>
-                            {idx + 1}. {mod.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Clock className="h-3 w-3" /> {mod.duration || "10 menit"}
-                          </p>
-                        </div>
-                        {isActive && <ChevronRight className="h-4 w-4 text-primary shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* Module Content */}
-            <Card className="border-0 shadow-md">
-              {currentModule ? (
-                <>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Badge variant="outline" className="text-xs mb-2">
-                          Modul {modules.findIndex((m) => m.id === currentModule.id) + 1}
-                        </Badge>
-                        <CardTitle className="text-xl">{currentModule.title}</CardTitle>
-                        <p className="text-sm text-muted-foreground mt-1">{stripHtml(currentModule.description)}</p>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <Separator />
-                  <CardContent className="py-6">
-                    <RichContent html={currentModule.content || ""} />
-
-                    {currentModule.attachments?.length > 0 && (
-                      <div className="mt-6 p-4 rounded-lg bg-accent/50">
-                        <p className="text-sm font-medium mb-2">Lampiran:</p>
-                        {currentModule.attachments.map((att: any) => (
-                          <Button key={att.id} variant="outline" size="sm" className="gap-2">
-                            <FileText className="h-3 w-3" /> {att.name}
-                          </Button>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex justify-between mt-8">
-                      <Button variant="outline" disabled={modules.findIndex(m => m.id === selectedModule) === 0}
-                        onClick={() => {
-                          const idx = modules.findIndex(m => m.id === selectedModule);
-                          if (idx > 0) setSelectedModule(modules[idx - 1].id);
-                        }}>
-                        Sebelumnya
-                      </Button>
-                      <div className="flex gap-2">
-                        {!completedModules.includes(currentModule.id) && (
-                          <Button
-                            variant="outline"
-                            className="text-emerald-600 border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                            onClick={() => handleCompleteModule(currentModule.id)}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-2" /> Tandai Selesai
-                          </Button>
-                        )}
-                        <Button
-                          onClick={() => {
-                            if (!completedModules.includes(currentModule.id)) {
-                              handleCompleteModule(currentModule.id);
-                            }
-                            const idx = modules.findIndex(m => m.id === selectedModule);
-                            if (idx < modules.length - 1) setSelectedModule(modules[idx + 1].id);
-                          }}
-                          disabled={modules.findIndex(m => m.id === selectedModule) === modules.length - 1}
-                          className="gradient-primary text-white">
-                          Selanjutnya
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </>
-              ) : (
-                <CardContent className="py-16 text-center text-muted-foreground">
-                  <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>{modules.length > 0 ? "Pilih modul untuk mulai belajar" : "Modul belum tersedia"}</p>
-                </CardContent>
-              )}
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Quizzes Tab */}
-        <TabsContent value="quizzes" className="mt-4 space-y-4">
-          {quizzes.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground border rounded-lg border-dashed">
-              <p>Belum ada kuis untuk kursus ini</p>
+      {progress.progress === 100 && progress.status !== "certified" ? (
+        <Card className="bg-accent text-accent-foreground">
+          <CardHeader className="flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle>{t("allRequirementsComplete")}</CardTitle>
+              <CardDescription className="text-accent-foreground/70">
+                {t("certificateReady")}
+              </CardDescription>
             </div>
-          ) : (
-            quizzes.map((quiz) => {
-              const attempt = quizAttempts[quiz.id];
-              const hasAttempt = !!attempt;
-              const quizScore = hasAttempt && attempt.totalPoints > 0
-                ? Math.round((attempt.score / attempt.totalPoints) * 100)
-                : 0;
-              const isPassed = hasAttempt && quizScore >= (quiz.passingScore || 70);
+            <Button onClick={() => void certificate()}>
+              <Trophy data-icon="inline-start" /> {t("issueCertificate")}
+            </Button>
+          </CardHeader>
+        </Card>
+      ) : null}
 
-              return (
-                <Card key={quiz.id} className="border-0 shadow-md">
-                  <CardContent className="p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{quiz.title}</h3>
-                          {hasAttempt && (
-                            <Badge
-                              variant="outline"
-                              className={isPassed
-                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                                : "bg-red-500/10 text-red-600 border-red-500/30"
-                              }
-                            >
-                              {isPassed ? "Lulus" : "Belum Lulus"}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">{stripHtml(quiz.description)}</p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                          <span>{quiz.questions?.length || 0} soal</span>
-                          <span>Waktu: {quiz.timeLimit || 0} menit</span>
-                          <span>Skor minimum: {quiz.passingScore || 0}%</span>
-                        </div>
-                        {hasAttempt && (
-                          <div className={`flex items-center gap-2 mt-2 text-sm font-medium ${
-                            isPassed ? "text-emerald-600" : "text-red-500"
-                          }`}>
-                            {isPassed ? (
-                              <Trophy className="h-4 w-4" />
-                            ) : (
-                              <XCircle className="h-4 w-4" />
-                            )}
-                            Skor terakhir: {quizScore}%
-                          </div>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={hasAttempt ? "outline" : "default"}
-                        className={`gap-1 shrink-0 ${!hasAttempt ? "gradient-primary text-white" : ""}`}
-                        asChild
-                      >
-                        <Link href={`/dashboard/student/courses/${courseId}/quiz/${quiz.id}`}>
-                          {hasAttempt ? (
-                            <><RotateCcw className="h-3 w-3" /> Coba Lagi</>
-                          ) : (
-                            <><Play className="h-3 w-3" /> Mulai Kuis</>
-                          )}
-                        </Link>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </TabsContent>
+      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        {current ? (
+          <CourseOutlineNavigation
+            items={outline}
+            courseId={id}
+            currentModule={current}
+            moduleCount={modules.length}
+            quizCount={quizzes.length}
+            assignmentCount={assignments.length}
+            completedModuleIds={completedModuleIds}
+            onSelectModule={selectModule}
+          />
+        ) : null}
 
-        {/* Assignments Tab */}
-        <TabsContent value="assignments" className="mt-4 space-y-4">
-          {assignments.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground border rounded-lg border-dashed">
-              <p>Belum ada tugas untuk kursus ini</p>
-            </div>
-          ) : (
-            assignments.map((assignment) => {
-              const submission = submissions.find(s => s.assignmentId === assignment.id);
-              const isGraded = submission && (submission.status === "passed" || submission.status === "failed" || submission.status === "graded" || submission.score > 0);
-              const isSubmitted = submission && submission.status === "submitted";
-
-              return (
-                <Card key={assignment.id} className="border-0 shadow-md">
-                  <CardContent className="p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          {isGraded ? (
-                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600">Dinilai</Badge>
-                          ) : isSubmitted ? (
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-600">Menunggu Penilaian</Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-600">Belum Disubmit</Badge>
-                          )}
-                          <Badge variant="secondary" className="text-xs font-normal">
-                            Deadline: {new Date(assignment.deadline).toLocaleDateString("id-ID")}
-                          </Badge>
-                        </div>
-                        <h3 className="font-semibold">{assignment.title}</h3>
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{stripHtml(assignment.description)}</p>
-                      </div>
-                      <Button size="sm" variant={isSubmitted || isGraded ? "outline" : "default"} className={`shrink-0 ${(!isSubmitted && !isGraded) ? "gradient-primary text-white" : ""}`} asChild>
-                        <Link href={`/dashboard/student/courses/${courseId}/assignments/${assignment.id}`}>
-                          Lihat Tugas
-                        </Link>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </TabsContent>
-
-        {/* Rating Tab */}
-        <TabsContent value="ratings" className="mt-4 space-y-6">
-          {/* Submit Rating */}
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg">Beri Rating</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRatingScore(star)}
-                    className="p-1 transition-transform hover:scale-110"
-                  >
-                    <Star
-                      className={`h-7 w-7 ${
-                        star <= ratingScore
-                          ? "fill-amber-400 text-amber-400"
-                          : "text-muted-foreground/30"
-                      }`}
-                    />
-                  </button>
-                ))}
-                {ratingScore > 0 && (
-                  <span className="ml-2 text-sm text-muted-foreground">{ratingScore}/5</span>
-                )}
-              </div>
-              <Textarea
-                placeholder="Tulis ulasan Anda (opsional)..."
-                value={ratingReview}
-                onChange={(e) => setRatingReview(e.target.value)}
-                rows={3}
-              />
-              <Button
-                onClick={handleSubmitRating}
-                disabled={submittingRating || ratingScore === 0}
-                className="gradient-primary text-white"
-              >
-                {submittingRating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                {myRating ? "Update Rating" : "Kirim Rating"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Ratings List */}
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                Ulasan ({ratings.length})
-                {course.rating > 0 && (
-                  <Badge variant="outline" className="gap-1">
-                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                    {course.rating.toFixed(1)}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {ratings.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">Belum ada ulasan</p>
-              ) : (
-                <div className="space-y-4">
-                  {ratings.map((r: any) => (
-                    <div key={r.id} className="flex gap-3 pb-4 border-b last:border-0 last:pb-0">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">
-                          {r.student?.name?.charAt(0) || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{r.student?.name || "Anonim"}</span>
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((s) => (
-                              <Star
-                                key={s}
-                                className={`h-3 w-3 ${
-                                  s <= r.score ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        {r.review && (
-                          <p className="text-sm text-muted-foreground mt-1">{r.review}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+        {current ? (
+          <Card className="min-w-0 [--card-spacing:--spacing(6)]">
+            <CardHeader className="border-b">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <CardDescription>{t("moduleNumber", { number: current.order })}</CardDescription>
+                  <CardTitle className="mt-1 text-2xl">{current.title}</CardTitle>
+                  <p className="mt-2 text-muted-foreground">{current.description}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                <Badge variant="outline">
+                  <Clock3 />
+                  {durationAmount(current.duration)
+                    ? t("hours", { count: Number(durationAmount(current.duration)) })
+                    : t("selfPaced")}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-8">
+              {coverImage ? (
+                <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-xl border bg-muted/40">
+                  {/* User uploads are served from the configurable API origin. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resourceUrl(coverImage)}
+                    alt={t("materialImageAlt", { title: current.title })}
+                    className="aspect-video max-h-[440px] w-full object-contain p-2 sm:p-4"
+                    onError={() =>
+                      setFailedCoverUrls((currentUrls) => new Set(currentUrls).add(coverImage))
+                    }
+                  />
+                </div>
+              ) : null}
+              <article
+                aria-label={t("materialContentAria", { title: current.title })}
+                className="mx-auto w-full max-w-3xl"
+              >
+                <RichContent html={current.content} />
+              </article>
 
-      {/* AI Chat Floating Widget */}
-      <AIChatWidget courseId={courseId} courseTitle={course.title} />
+              {attachments.length ? (
+                <section
+                  aria-labelledby="attachment-title"
+                  className="mx-auto w-full max-w-3xl rounded-xl border bg-muted/30"
+                >
+                  <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+                    <div>
+                      <h3 id="attachment-title" className="font-bold">
+                        {t("attachments")}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {t("filesAvailable", { count: attachments.length })}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">{t("page", { page: attachmentPage })}</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {visibleAttachments.map((attachment) => (
+                      <a
+                        key={attachment.id}
+                        href={resourceUrl(attachment.url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted"
+                      >
+                        <span className="grid size-9 place-items-center rounded-lg bg-background text-primary">
+                          {isImageResource(attachment.name, attachment.type) ? (
+                            <FileText />
+                          ) : (
+                            <Download />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold">{attachment.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {attachment.type || t("file")} ·
+                            {formatBytes(attachment.size, t("sizeUnavailable"))}
+                          </span>
+                        </span>
+                        <Download />
+                      </a>
+                    ))}
+                  </div>
+                  {attachmentPages > 1 ? (
+                    <div className="flex justify-end border-t p-3">
+                      <PaginationControl
+                        currentPage={attachmentPage}
+                        totalPages={attachmentPages}
+                        onPageChange={setAttachmentPage}
+                      />
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
+              <div className="mx-auto flex w-full max-w-3xl flex-col justify-between gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold">{t("finishedReading")}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t("markCompleteDescription")}
+                  </p>
+                </div>
+                <Button
+                  className="shrink-0"
+                  variant="outline"
+                  disabled={progress.completedModules.includes(current.id)}
+                  onClick={() => void complete(current.id)}
+                >
+                  <CheckCircle2 data-icon="inline-start" />
+                  {progress.completedModules.includes(current.id)
+                    ? t("alreadyComplete")
+                    : t("markComplete")}
+                </Button>
+              </div>
+            </CardContent>
+            <CardFooter className="sticky bottom-0 flex-col justify-between gap-3 bg-card/95 backdrop-blur sm:flex-row">
+              <div>{renderItemAction(previousItem, "previous")}</div>
+              <div>{renderItemAction(nextItem, "next")}</div>
+            </CardFooter>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("emptyTitle")}</CardTitle>
+              <CardDescription>{t("emptyDescription")}</CardDescription>
+            </CardHeader>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

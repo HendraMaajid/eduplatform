@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"log"
 	"net/http"
 
@@ -21,8 +20,30 @@ func GetQuizzes(c *gin.Context) {
 	c.JSON(http.StatusOK, quizzes)
 }
 
+func GetManagedQuizzes(c *gin.Context) {
+	courseID := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeCourseManagement(c.Request.Context(), courseID, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	quizzes, err := service.GetManagedQuizzesByCourse(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load quizzes"})
+		return
+	}
+	c.JSON(http.StatusOK, quizzes)
+}
+
 func CreateQuiz(c *gin.Context) {
 	courseID := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeCourseManagement(c.Request.Context(), courseID, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	var req dto.CreateQuizRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -40,6 +61,12 @@ func CreateQuiz(c *gin.Context) {
 
 func UpdateQuiz(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeQuizManagement(c.Request.Context(), id, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	var req dto.UpdateQuizRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -57,6 +84,12 @@ func UpdateQuiz(c *gin.Context) {
 
 func DeleteQuiz(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeQuizManagement(c.Request.Context(), id, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	if err := service.DeleteQuiz(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -76,8 +109,30 @@ func GetAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
+func GetManagedAssignments(c *gin.Context) {
+	courseID := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeCourseManagement(c.Request.Context(), courseID, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	assignments, err := service.GetManagedAssignmentsByCourse(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load assignments"})
+		return
+	}
+	c.JSON(http.StatusOK, assignments)
+}
+
 func CreateAssignment(c *gin.Context) {
 	courseID := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeCourseManagement(c.Request.Context(), courseID, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	var req dto.CreateAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -95,6 +150,12 @@ func CreateAssignment(c *gin.Context) {
 
 func UpdateAssignment(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeAssignmentManagement(c.Request.Context(), id, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	var req dto.UpdateAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -112,6 +173,12 @@ func UpdateAssignment(c *gin.Context) {
 
 func DeleteAssignment(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeAssignmentManagement(c.Request.Context(), id, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	if err := service.DeleteAssignment(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -123,6 +190,12 @@ func DeleteAssignment(c *gin.Context) {
 // Questions — Full view (teachers only, includes correctAnswer)
 func GetQuestions(c *gin.Context) {
 	quizID := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeQuizManagement(c.Request.Context(), quizID, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	questions, err := service.GetQuestionsByQuiz(c.Request.Context(), quizID)
 	if err != nil {
 		log.Printf("GetQuestions error: %v", err)
@@ -135,7 +208,7 @@ func GetQuestions(c *gin.Context) {
 // GetQuestionsForStudent returns questions without correctAnswer (safe for students)
 func GetQuestionsForStudent(c *gin.Context) {
 	quizID := c.Param("id")
-	questions, err := service.GetQuestionsByQuiz(c.Request.Context(), quizID)
+	questions, err := service.GetPublishedQuestionsByQuiz(c.Request.Context(), quizID)
 	if err != nil {
 		log.Printf("GetQuestionsForStudent error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load questions"})
@@ -171,6 +244,12 @@ func GetQuestionsForStudent(c *gin.Context) {
 
 func CreateQuestion(c *gin.Context) {
 	quizID := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeQuizManagement(c.Request.Context(), quizID, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	var req dto.CreateQuestionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -188,6 +267,12 @@ func CreateQuestion(c *gin.Context) {
 
 func UpdateQuestion(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeQuestionManagement(c.Request.Context(), id, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	var req dto.UpdateQuestionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -205,6 +290,12 @@ func UpdateQuestion(c *gin.Context) {
 
 func DeleteQuestion(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("userID")
+	role, _ := c.Get("role")
+	if err := service.AuthorizeQuestionManagement(c.Request.Context(), id, userID.(string), role.(string)); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
 	if err := service.DeleteQuestion(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -234,10 +325,6 @@ func SubmitQuiz(c *gin.Context) {
 
 	attempt, err := service.SubmitQuiz(c.Request.Context(), studentID, quizID, req)
 	if err != nil {
-		if errors.Is(err, service.ErrNotEnrolled) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Not enrolled in this course"})
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

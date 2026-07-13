@@ -1,248 +1,314 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ClipboardCheck, FileText, Download, Clock, CheckCircle2, XCircle, Star, Loader2, BookOpen } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
+import { CheckCircle2, ClipboardCheck, ExternalLink, FileText, Search } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { PaginationControl } from "@/components/ui/pagination-control";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { api } from "@/lib/api";
+import type { Submission, SubmissionStatus } from "@/lib/types";
 
-const statusConfig: Record<string, { label: string; className: string; icon: React.ComponentType<{className?: string}> }> = {
-  submitted: { label: "Menunggu", className: "bg-amber-500/10 text-amber-600 border-amber-500/20", icon: Clock },
-  graded: { label: "Dinilai", className: "bg-blue-500/10 text-blue-600 border-blue-500/20", icon: Star },
-  passed: { label: "Lulus", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20", icon: CheckCircle2 },
-  failed: { label: "Tidak Lulus", className: "bg-red-500/10 text-red-600 border-red-500/20", icon: XCircle },
-};
+type StatusFilter = "all" | SubmissionStatus;
 
-export default function TeacherGradingPage() {
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [gradingOpen, setGradingOpen] = useState(false);
-  const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
-  const [score, setScore] = useState("");
+const PAGE_SIZE = 8;
+
+export default function GradingPage() {
+  const t = useTranslations("grading");
+  const format = useFormatter();
+  const [items, setItems] = useState<Submission[] | null>(null);
+  const [selected, setSelected] = useState<Submission | null>(null);
+  const [score, setScore] = useState(80);
   const [feedback, setFeedback] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(1);
 
-  const fetchSubmissions = async (silent = false) => {
+  const load = useCallback(async () => {
     try {
-      if (!silent) setLoading(true);
-      const data = await api.get("/submissions/teacher");
-      setSubmissions(data || []);
-    } catch (error) {
-      console.error("Failed to fetch teacher submissions", error);
-      toast.error("Gagal memuat data penilaian");
-    } finally {
-      if (!silent) setLoading(false);
+      setItems(await api.get<Submission[]>("/manage/submissions"));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : t("loadError"));
+      setItems([]);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    fetchSubmissions();
-  }, []);
-
-  const handleGrade = async () => {
-    if (!score) { toast.error("Masukkan skor!"); return; }
-    try {
-      await api.post(`/submissions/${selectedSubmission?.id}/grade`, {
-        score: Number(score),
-        feedback: feedback
+    let active = true;
+    api
+      .get<Submission[]>("/manage/submissions")
+      .then((submissions) => {
+        if (active) setItems(submissions);
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        toast.error(cause instanceof Error ? cause.message : t("loadError"));
+        setItems([]);
       });
-      toast.success(`Berhasil menilai tugas ${selectedSubmission?.student?.name} dengan skor ${score}`);
-      setGradingOpen(false);
-      setScore("");
-      setFeedback("");
-      fetchSubmissions(true);
-    } catch (error) {
-      console.error("Failed to grade", error);
-      toast.error("Gagal mengirim penilaian");
+    return () => {
+      active = false;
+    };
+  }, [t]);
+
+  const filteredItems = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (items ?? []).filter((submission) => {
+      const matchesStatus = status === "all" || submission.status === status;
+      const matchesSearch =
+        !term ||
+        submission.student?.name.toLocaleLowerCase().includes(term) ||
+        submission.student?.email.toLocaleLowerCase().includes(term) ||
+        submission.assignment?.title.toLocaleLowerCase().includes(term) ||
+        submission.assignment?.course?.title.toLocaleLowerCase().includes(term) ||
+        submission.fileName?.toLocaleLowerCase().includes(term);
+      return matchesStatus && Boolean(matchesSearch);
+    });
+  }, [items, search, status]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const visibleItems = filteredItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  async function grade(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    try {
+      await api.post<Submission>(`/manage/submissions/${selected.id}/grade`, {
+        score,
+        feedback,
+      });
+      toast.success(t("saved"));
+      setSelected(null);
+      await load();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : t("saveError"));
     }
-  };
-
-  const openGrading = (sub: any) => {
-    setSelectedSubmission(sub);
-    setScore(sub.score?.toString() || "");
-    setFeedback(sub.feedback || "");
-    setGradingOpen(true);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
   }
 
-  const pendingSubmissions = submissions.filter(s => s.status === "submitted");
-  const gradedSubmissions = submissions.filter(s => s.status !== "submitted");
-
-  const groupSubmissionsByCourse = (subs: any[]) => {
-    return subs.reduce((acc, sub) => {
-      const courseTitle = sub.assignment?.course?.title || "Lainnya";
-      if (!acc[courseTitle]) acc[courseTitle] = [];
-      acc[courseTitle].push(sub);
-      return acc;
-    }, {} as Record<string, any[]>);
-  };
-
-  const pendingByCourse = groupSubmissionsByCourse(pendingSubmissions);
-  const gradedByCourse = groupSubmissionsByCourse(gradedSubmissions);
+  function openGrading(submission: Submission) {
+    setSelected(submission);
+    setScore(submission.score ?? 80);
+    setFeedback(submission.feedback ?? "");
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Penilaian</h1>
-        <p className="text-muted-foreground">Nilai tugas dan project siswa</p>
+        <p className="text-sm font-bold uppercase tracking-[.16em] text-primary">{t("eyebrow")}</p>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{t("title")}</h1>
+        <p className="mt-2 text-muted-foreground">{t("description")}</p>
       </div>
 
-      <Tabs defaultValue="pending">
-        <TabsList>
-          <TabsTrigger value="pending" className="gap-2">
-            <Clock className="h-3 w-3" /> Menunggu
-            <Badge variant="secondary" className="h-5 min-w-5 text-xs">{pendingSubmissions.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="graded" className="gap-2">
-            <CheckCircle2 className="h-3 w-3" /> Sudah Dinilai
-          </TabsTrigger>
-        </TabsList>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder={t("searchPlaceholder")}
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+        <Select
+          value={status}
+          onValueChange={(value) => {
+            setStatus((value || "all") as StatusFilter);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger aria-label={t("filterStatus")}>
+            <SelectValue>{t(`statuses.${status}`)}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">{t("statuses.all")}</SelectItem>
+              <SelectItem value="submitted">{t("statuses.submitted")}</SelectItem>
+              <SelectItem value="graded">{t("statuses.graded")}</SelectItem>
+              <SelectItem value="passed">{t("statuses.passed")}</SelectItem>
+              <SelectItem value="failed">{t("statuses.failed")}</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
 
-        <TabsContent value="pending" className="space-y-6 mt-4">
-          {Object.keys(pendingByCourse).length > 0 ? (Object.entries(pendingByCourse) as [string, any[]][]).map(([courseName, subs]) => (
-            <div key={courseName} className="space-y-4">
-              <h2 className="text-lg font-semibold border-b pb-2 flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-primary" /> {courseName}
-              </h2>
-              {subs.map((sub) => (
-                <Card key={sub.id} className="border-0 shadow-md">
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-4">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={sub.student?.avatar} />
-                        <AvatarFallback className="gradient-primary text-white">{sub.student?.name?.slice(0, 2).toUpperCase() || "S"}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold">{sub.student?.name || "Siswa"}</h3>
-                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
-                            <Clock className="h-3 w-3 mr-1" /> Menunggu Penilaian
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">Tugas: {sub.assignment?.title}</p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="text-xs text-muted-foreground">
-                            Dikumpulkan {new Date(sub.createdAt).toLocaleDateString("id-ID")}
-                          </span>
-                        </div>
-                        {sub.description && (
-                          <p className="text-sm text-muted-foreground mt-2 bg-accent/50 p-3 rounded-lg">{sub.description}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-4">
-                      <Button size="sm" className="gap-1" onClick={() => openGrading(sub)}>
-                        <ClipboardCheck className="h-3 w-3" /> Nilai
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+      {selected ? (
+        <Card className="border-2 border-primary/40 shadow-sm">
+          <CardHeader className="flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle>
+                {t("gradeStudent", { name: selected.student?.name || t("student") })}
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {selected.assignment?.title} · {selected.assignment?.course?.title || t("course")}
+              </CardDescription>
             </div>
-          )) : (
-            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
-              <ClipboardCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Tidak ada tugas yang menunggu penilaian.</p>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="graded" className="space-y-6 mt-4">
-          {Object.keys(gradedByCourse).length > 0 ? (Object.entries(gradedByCourse) as [string, any[]][]).map(([courseName, subs]) => (
-            <div key={courseName} className="space-y-4">
-              <h2 className="text-lg font-semibold border-b pb-2 flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-primary" /> {courseName}
-              </h2>
-              {subs.map((sub) => {
-                const status = statusConfig[sub.status] || statusConfig.graded;
-                const StatusIcon = status.icon;
-                return (
-                  <Card key={sub.id} className="border-0 shadow-md">
-                    <CardContent className="p-5">
-                      <div className="flex items-start gap-4">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={sub.student?.avatar} />
-                          <AvatarFallback className="gradient-primary text-white">{sub.student?.name?.slice(0, 2).toUpperCase() || "S"}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-semibold">{sub.student?.name || "Siswa"}</h3>
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-bold text-primary">{sub.score}/{sub.assignment?.maxScore || 100}</span>
-                              <Badge variant="outline" className={status.className}>
-                                <StatusIcon className="h-3 w-3 mr-1" /> {status.label}
-                              </Badge>
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground">Tugas: {sub.assignment?.title}</p>
-                          {sub.feedback && (
-                            <p className="text-sm mt-2 bg-accent/50 p-3 rounded-lg">{sub.feedback}</p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )) : (
-            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
-              <ClipboardCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Belum ada tugas yang dinilai.</p>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Grading Dialog */}
-      <Dialog open={gradingOpen} onOpenChange={setGradingOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nilai Tugas</DialogTitle>
-            <DialogDescription>Berikan penilaian untuk {selectedSubmission?.student?.name}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="rounded-lg bg-accent/50 p-3">
-              <p className="text-sm font-medium">Link Tautan Tugas</p>
-              <a href={selectedSubmission?.fileUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline font-medium truncate block mt-1">
-                {selectedSubmission?.fileUrl}
-              </a>
-              {selectedSubmission?.description && (
-                <p className="text-xs text-muted-foreground mt-1">{selectedSubmission.description}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label>Skor (0-{selectedSubmission?.assignment?.maxScore || 100})</Label>
-              <Input type="number" min="0" max={selectedSubmission?.assignment?.maxScore || 100} value={score} onChange={(e) => setScore(e.target.value)} placeholder="Masukkan skor..." />
-            </div>
-            <div className="space-y-2">
-              <Label>Feedback</Label>
-              <Textarea value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Berikan feedback untuk siswa..." rows={4} />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setGradingOpen(false)}>Batal</Button>
-            <Button onClick={handleGrade} className="gradient-primary text-white">
-              <CheckCircle2 className="h-4 w-4 mr-1" /> Simpan Nilai
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
+              {t("close")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={grade}>
+              <FieldGroup>
+                <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-end">
+                  <Field>
+                    <FieldLabel htmlFor="score">{t("score")}</FieldLabel>
+                    <Input
+                      id="score"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={score}
+                      onChange={(event) => setScore(Number(event.target.value))}
+                      required
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="feedback">{t("feedback")}</FieldLabel>
+                    <Textarea
+                      id="feedback"
+                      rows={3}
+                      placeholder={t("feedbackPlaceholder")}
+                      value={feedback}
+                      onChange={(event) => setFeedback(event.target.value)}
+                    />
+                  </Field>
+                  <Button type="submit">
+                    <CheckCircle2 data-icon="inline-start" />
+                    {t("saveGrade")}
+                  </Button>
+                </div>
+              </FieldGroup>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {items === null ? (
+        <Skeleton className="h-80" />
+      ) : (
+        <Card className="overflow-hidden border-2">
+          <CardContent className="p-0">
+            <Table className="min-w-[980px]">
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="pl-5">{t("student")}</TableHead>
+                  <TableHead>{t("assignment")}</TableHead>
+                  <TableHead>{t("submittedAt")}</TableHead>
+                  <TableHead>{t("submission")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead className="pr-5 text-right">{t("action")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleItems.length ? (
+                  visibleItems.map((submission) => (
+                    <TableRow key={submission.id}>
+                      <TableCell className="pl-5">
+                        <p className="max-w-52 truncate font-semibold">
+                          {submission.student?.name || t("student")}
+                        </p>
+                        <p className="max-w-52 truncate text-xs text-muted-foreground">
+                          {submission.student?.email}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <p className="max-w-64 truncate font-medium">
+                          {submission.assignment?.title || "—"}
+                        </p>
+                        <p className="max-w-64 truncate text-xs text-muted-foreground">
+                          {submission.assignment?.course?.title || t("course")}
+                        </p>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format.dateTime(new Date(submission.submittedAt), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {submission.fileUrl ? (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={submission.fileUrl} target="_blank" rel="noreferrer">
+                              <FileText data-icon="inline-start" />
+                              <span className="max-w-36 truncate">
+                                {submission.fileName || t("openFile")}
+                              </span>
+                              <ExternalLink data-icon="inline-end" />
+                            </a>
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={submission.status === "submitted" ? "secondary" : "outline"}
+                        >
+                          {t(`statuses.${submission.status}`)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="pr-5 text-right">
+                        <Button
+                          variant={selected?.id === submission.id ? "secondary" : "outline"}
+                          size="sm"
+                          onClick={() => openGrading(submission)}
+                        >
+                          {t(submission.score === undefined ? "grade" : "editGrade")}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-52 text-center">
+                      <div className="mx-auto flex max-w-sm flex-col items-center gap-2 text-muted-foreground">
+                        <ClipboardCheck className="size-9" />
+                        <p className="font-semibold text-foreground">{t("emptyTitle")}</p>
+                        <p className="text-xs">{t("emptyDescription")}</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {items !== null ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            {t("resultCount", { count: filteredItems.length })}
+          </p>
+          {totalPages > 1 ? (
+            <PaginationControl currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

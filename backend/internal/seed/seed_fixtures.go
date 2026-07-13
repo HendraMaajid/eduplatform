@@ -4,7 +4,6 @@ package seed
 
 type courseTemplate struct {
 	Title, Slug, Description, ShortDescription, Category, Level, Duration, Status string
-	Price                                                                          int
 }
 
 type moduleTemplate struct {
@@ -55,25 +54,25 @@ var studentNames = []string{
 
 var courseTemplates = []courseTemplate{
 	// Pemrograman (3)
-	{Title: "Fullstack Web Developer dengan Go & Next.js", Slug: "fullstack-go-nextjs", Description: "Pelajari cara membangun aplikasi web modern menggunakan Golang untuk backend dan Next.js untuk frontend.", ShortDescription: "Membangun web modern dari nol.", Category: "Pemrograman", Level: "intermediate", Price: 1500000, Duration: "12 Minggu", Status: "published"},
-	{Title: "Dasar Pemrograman Python untuk Pemula", Slug: "dasar-python-pemula", Description: "Kursus lengkap untuk mempelajari Python dari dasar hingga mahir membuat aplikasi sederhana.", ShortDescription: "Belajar Python dari nol.", Category: "Pemrograman", Level: "beginner", Price: 500000, Duration: "8 Minggu", Status: "published"},
-	{Title: "Mobile App Development dengan Flutter", Slug: "mobile-flutter", Description: "Bangun aplikasi mobile cross-platform menggunakan Flutter dan Dart.", ShortDescription: "Buat app Android & iOS.", Category: "Pemrograman", Level: "intermediate", Price: 1200000, Duration: "10 Minggu", Status: "published"},
+	{Title: "Fullstack Web Developer dengan Go & Next.js", Slug: "fullstack-go-nextjs", Description: "Pelajari cara membangun aplikasi web modern menggunakan Golang untuk backend dan Next.js untuk frontend.", ShortDescription: "Membangun web modern dari nol.", Category: "Pemrograman", Level: "intermediate", Duration: "12 Minggu", Status: "published"},
+	{Title: "Dasar Pemrograman Python untuk Pemula", Slug: "dasar-python-pemula", Description: "Kursus lengkap untuk mempelajari Python dari dasar hingga mahir membuat aplikasi sederhana.", ShortDescription: "Belajar Python dari nol.", Category: "Pemrograman", Level: "beginner", Duration: "8 Minggu", Status: "published"},
+	{Title: "Mobile App Development dengan Flutter", Slug: "mobile-flutter", Description: "Bangun aplikasi mobile cross-platform menggunakan Flutter dan Dart.", ShortDescription: "Buat app Android & iOS.", Category: "Pemrograman", Level: "intermediate", Duration: "10 Minggu", Status: "published"},
 	// Desain (3)
-	{Title: "UI/UX Design Masterclass", Slug: "uiux-masterclass", Description: "Kuasai prinsip desain antarmuka dan pengalaman pengguna menggunakan Figma.", ShortDescription: "Desain UI/UX profesional.", Category: "Desain", Level: "intermediate", Price: 900000, Duration: "8 Minggu", Status: "published"},
-	{Title: "Graphic Design dengan Adobe Illustrator", Slug: "graphic-design-illustrator", Description: "Pelajari teknik desain grafis profesional menggunakan Adobe Illustrator.", ShortDescription: "Desain grafis dari dasar.", Category: "Desain", Level: "beginner", Price: 750000, Duration: "6 Minggu", Status: "published"},
-	{Title: "Motion Graphics & After Effects", Slug: "motion-graphics-ae", Description: "Buat animasi dan motion graphics profesional dengan After Effects.", ShortDescription: "Animasi profesional.", Category: "Desain", Level: "advanced", Price: 1300000, Duration: "10 Minggu", Status: "draft"},
+	{Title: "UI/UX Design Masterclass", Slug: "uiux-masterclass", Description: "Kuasai prinsip desain antarmuka dan pengalaman pengguna menggunakan Figma.", ShortDescription: "Desain UI/UX profesional.", Category: "Desain", Level: "intermediate", Duration: "8 Minggu", Status: "published"},
+	{Title: "Graphic Design dengan Adobe Illustrator", Slug: "graphic-design-illustrator", Description: "Pelajari teknik desain grafis profesional menggunakan Adobe Illustrator.", ShortDescription: "Desain grafis dari dasar.", Category: "Desain", Level: "beginner", Duration: "6 Minggu", Status: "published"},
+	{Title: "Motion Graphics & After Effects", Slug: "motion-graphics-ae", Description: "Buat animasi dan motion graphics profesional dengan After Effects.", ShortDescription: "Animasi profesional.", Category: "Desain", Level: "advanced", Duration: "10 Minggu", Status: "draft"},
 	// Bisnis (3)
-	{Title: "Digital Marketing Strategy", Slug: "digital-marketing-strategy", Description: "Strategi pemasaran digital lengkap dari SEO, SEM, hingga social media marketing.", ShortDescription: "Kuasai digital marketing.", Category: "Bisnis", Level: "intermediate", Price: 800000, Duration: "6 Minggu", Status: "published"},
-	{Title: "Entrepreneurship & Startup Building", Slug: "entrepreneurship-startup", Description: "Panduan lengkap membangun startup dari ide hingga pendanaan.", ShortDescription: "Bangun startup Anda.", Category: "Bisnis", Level: "beginner", Price: 600000, Duration: "8 Minggu", Status: "published"},
-	{Title: "Financial Management untuk UMKM", Slug: "financial-management-umkm", Description: "Kelola keuangan bisnis kecil dan menengah secara profesional.", ShortDescription: "Manajemen keuangan UMKM.", Category: "Bisnis", Level: "beginner", Price: 450000, Duration: "4 Minggu", Status: "published"},
+	{Title: "Digital Marketing Strategy", Slug: "digital-marketing-strategy", Description: "Strategi pemasaran digital lengkap dari SEO, SEM, hingga social media marketing.", ShortDescription: "Kuasai digital marketing.", Category: "Bisnis", Level: "intermediate", Duration: "6 Minggu", Status: "published"},
+	{Title: "Entrepreneurship & Startup Building", Slug: "entrepreneurship-startup", Description: "Panduan lengkap membangun startup dari ide hingga pendanaan.", ShortDescription: "Bangun startup Anda.", Category: "Bisnis", Level: "beginner", Duration: "8 Minggu", Status: "published"},
+	{Title: "Financial Management untuk UMKM", Slug: "financial-management-umkm", Description: "Kelola keuangan bisnis kecil dan menengah secara profesional.", ShortDescription: "Manajemen keuangan UMKM.", Category: "Bisnis", Level: "beginner", Duration: "4 Minggu", Status: "published"},
 	// Data Science (3)
-	{Title: "Data Science dengan Python & Pandas", Slug: "data-science-python", Description: "Analisis data menggunakan Python, Pandas, dan visualisasi dengan Matplotlib.", ShortDescription: "Analisis data profesional.", Category: "Data Science", Level: "intermediate", Price: 1100000, Duration: "10 Minggu", Status: "published"},
-	{Title: "Machine Learning Fundamentals", Slug: "machine-learning-fundamentals", Description: "Dasar-dasar machine learning dari regresi hingga neural network.", ShortDescription: "Fondasi machine learning.", Category: "Data Science", Level: "advanced", Price: 1400000, Duration: "12 Minggu", Status: "published"},
-	{Title: "SQL & Database Management", Slug: "sql-database-management", Description: "Kuasai SQL dan manajemen database relasional untuk analisis data.", ShortDescription: "SQL dari dasar hingga mahir.", Category: "Data Science", Level: "beginner", Price: 550000, Duration: "6 Minggu", Status: "draft"},
+	{Title: "Data Science dengan Python & Pandas", Slug: "data-science-python", Description: "Analisis data menggunakan Python, Pandas, dan visualisasi dengan Matplotlib.", ShortDescription: "Analisis data profesional.", Category: "Data Science", Level: "intermediate", Duration: "10 Minggu", Status: "published"},
+	{Title: "Machine Learning Fundamentals", Slug: "machine-learning-fundamentals", Description: "Dasar-dasar machine learning dari regresi hingga neural network.", ShortDescription: "Fondasi machine learning.", Category: "Data Science", Level: "advanced", Duration: "12 Minggu", Status: "published"},
+	{Title: "SQL & Database Management", Slug: "sql-database-management", Description: "Kuasai SQL dan manajemen database relasional untuk analisis data.", ShortDescription: "SQL dari dasar hingga mahir.", Category: "Data Science", Level: "beginner", Duration: "6 Minggu", Status: "draft"},
 	// Bahasa (3)
-	{Title: "English for Professional Communication", Slug: "english-professional", Description: "Tingkatkan kemampuan bahasa Inggris untuk komunikasi bisnis dan profesional.", ShortDescription: "Bahasa Inggris profesional.", Category: "Bahasa", Level: "intermediate", Price: 700000, Duration: "8 Minggu", Status: "published"},
-	{Title: "Bahasa Jepang N5-N4", Slug: "bahasa-jepang-n5n4", Description: "Pelajari bahasa Jepang dari level N5 hingga N4 dengan metode interaktif.", ShortDescription: "Bahasa Jepang dasar.", Category: "Bahasa", Level: "beginner", Price: 650000, Duration: "12 Minggu", Status: "published"},
-	{Title: "Mandarin untuk Bisnis", Slug: "mandarin-bisnis", Description: "Bahasa Mandarin praktis untuk keperluan bisnis dan perdagangan.", ShortDescription: "Mandarin bisnis praktis.", Category: "Bahasa", Level: "intermediate", Price: 800000, Duration: "10 Minggu", Status: "draft"},
+	{Title: "English for Professional Communication", Slug: "english-professional", Description: "Tingkatkan kemampuan bahasa Inggris untuk komunikasi bisnis dan profesional.", ShortDescription: "Bahasa Inggris profesional.", Category: "Bahasa", Level: "intermediate", Duration: "8 Minggu", Status: "published"},
+	{Title: "Bahasa Jepang N5-N4", Slug: "bahasa-jepang-n5n4", Description: "Pelajari bahasa Jepang dari level N5 hingga N4 dengan metode interaktif.", ShortDescription: "Bahasa Jepang dasar.", Category: "Bahasa", Level: "beginner", Duration: "12 Minggu", Status: "published"},
+	{Title: "Mandarin untuk Bisnis", Slug: "mandarin-bisnis", Description: "Bahasa Mandarin praktis untuk keperluan bisnis dan perdagangan.", ShortDescription: "Mandarin bisnis praktis.", Category: "Bahasa", Level: "intermediate", Duration: "10 Minggu", Status: "draft"},
 }
 
 // ─── Module Templates by Category ────────────────────────────────────────────
@@ -268,14 +267,4 @@ var teacherNotifTemplates = []notifTemplate{
 	{Title: "Quiz Diselesaikan", Message: "Seorang siswa menyelesaikan quiz di {courseTitle}.", Type: "info", Link: "/dashboard/teacher"},
 	{Title: "Kursus Populer", Message: "Kursus {courseTitle} Anda telah mencapai 20+ pendaftar!", Type: "success", Link: "/dashboard/teacher"},
 	{Title: "Review Baru", Message: "Ada review baru untuk kursus {courseTitle} Anda.", Type: "info", Link: "/dashboard/teacher"},
-}
-
-// ─── Feedback Templates ───────────────────────────────────────────────────────
-
-var feedbackTemplates = []string{
-	"Bagus! Pekerjaan yang rapi dan sesuai instruksi.",
-	"Sangat baik. Implementasi sudah benar dan well-documented.",
-	"Good job! Ada beberapa minor improvement yang bisa dilakukan.",
-	"Excellent work! Melebihi ekspektasi.",
-	"Baik, tapi perlu perbaikan di bagian error handling.",
 }

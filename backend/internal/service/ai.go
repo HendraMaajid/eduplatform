@@ -31,11 +31,11 @@ type groqMessage struct {
 
 // groqRequest is the request body for Groq API.
 type groqRequest struct {
-	Model       string         `json:"model"`
-	Messages    []groqMessage  `json:"messages"`
-	Stream      bool           `json:"stream"`
-	Temperature float64        `json:"temperature"`
-	MaxTokens   int            `json:"max_tokens"`
+	Model       string        `json:"model"`
+	Messages    []groqMessage `json:"messages"`
+	Stream      bool          `json:"stream"`
+	Temperature float64       `json:"temperature"`
+	MaxTokens   int           `json:"max_tokens"`
 }
 
 // groqStreamChunk represents a single SSE chunk from Groq.
@@ -75,7 +75,7 @@ func NewGroqProvider() *GroqProvider {
 }
 
 // StreamChat sends messages to Groq and streams the response.
-func (g *GroqProvider) StreamChat(ctx context.Context, messages []groqMessage, writer io.Writer) error {
+func (g *GroqProvider) StreamChat(ctx context.Context, messages []groqMessage, writer io.Writer) (streamErr error) {
 	if g.APIKey == "" {
 		return fmt.Errorf("GROQ_API_KEY is not configured")
 	}
@@ -105,11 +105,18 @@ func (g *GroqProvider) StreamChat(ctx context.Context, messages []groqMessage, w
 	if err != nil {
 		return fmt.Errorf("failed to call Groq API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil && streamErr == nil {
+			streamErr = fmt.Errorf("close Groq response body: %w", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Groq API error (status %d): %s", resp.StatusCode, string(body))
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("read Groq API error response: %w", readErr)
+		}
+		return fmt.Errorf("groq API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	// Parse SSE stream from Groq and forward to client
@@ -124,7 +131,9 @@ func (g *GroqProvider) StreamChat(ctx context.Context, messages []groqMessage, w
 		data := strings.TrimPrefix(line, "data: ")
 
 		if data == "[DONE]" {
-			fmt.Fprintf(writer, "data: [DONE]\n\n")
+			if _, err := fmt.Fprint(writer, "data: [DONE]\n\n"); err != nil {
+				return fmt.Errorf("write completion event: %w", err)
+			}
 			if flusher, ok := writer.(http.Flusher); ok {
 				flusher.Flush()
 			}
@@ -139,8 +148,13 @@ func (g *GroqProvider) StreamChat(ctx context.Context, messages []groqMessage, w
 		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
 			// Send simplified SSE to client
 			content := chunk.Choices[0].Delta.Content
-			sseData, _ := json.Marshal(map[string]string{"content": content})
-			fmt.Fprintf(writer, "data: %s\n\n", sseData)
+			sseData, err := json.Marshal(map[string]string{"content": content})
+			if err != nil {
+				return fmt.Errorf("marshal stream event: %w", err)
+			}
+			if _, err := fmt.Fprintf(writer, "data: %s\n\n", sseData); err != nil {
+				return fmt.Errorf("write stream event: %w", err)
+			}
 			if flusher, ok := writer.(http.Flusher); ok {
 				flusher.Flush()
 			}

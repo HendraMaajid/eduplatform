@@ -55,12 +55,16 @@ func UploadFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
 		return
 	}
-	defer src.Close()
 
 	buf := make([]byte, 512)
-	n, err := src.Read(buf)
-	if err != nil || n == 0 {
+	n, readErr := src.Read(buf)
+	closeErr := src.Close()
+	if readErr != nil || n == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read file content"})
+		return
+	}
+	if closeErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finish reading file"})
 		return
 	}
 
@@ -72,7 +76,7 @@ func UploadFile(c *gin.Context) {
 
 	// Create uploads directory if it doesn't exist
 	uploadDir := "./public/uploads"
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(uploadDir, 0o750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
 	}

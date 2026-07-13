@@ -1,290 +1,278 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { useParams } from "next/navigation";
+import { useFormatter, useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   ArrowLeft,
-  Upload,
-  Link as LinkIcon,
+  CalendarDays,
   CheckCircle2,
-  Clock,
+  ClipboardCheck,
+  ExternalLink,
+  FileText,
+  Link2,
   Loader2,
-  FileText
+  MessageSquareText,
+  Send,
+  Trophy,
 } from "lucide-react";
-import { toast } from "sonner";
-import { stripHtml, RichContent } from "@/lib/html-utils";
+import { api } from "@/lib/api";
+import { RichContent } from "@/lib/html-utils";
+import type { Assignment, Submission } from "@/lib/types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
-export default function AssignmentSubmissionPage() {
-  const params = useParams();
-  const router = useRouter();
-  const courseId = params.id as string;
-  const assignmentId = params.assignmentId as string;
+function SubmissionStatus({ submission }: { submission: Submission }) {
+  const t = useTranslations("assignmentPage");
+  const isWaiting = submission.status === "submitted";
+  const isFailed = submission.status === "failed";
+  return (
+    <Alert variant={isFailed ? "destructive" : "default"}>
+      {isWaiting ? <ClipboardCheck /> : isFailed ? <FileText /> : <Trophy />}
+      <AlertTitle>
+        {isWaiting
+          ? t("submitted")
+          : isFailed
+            ? t("revisionNeeded", { score: submission.score ?? 0 })
+            : t("graded", { score: submission.score ?? 0 })}
+      </AlertTitle>
+      <AlertDescription>
+        {isWaiting ? t("waitingDescription") : submission.feedback || t("noFeedback")}
+      </AlertDescription>
+    </Alert>
+  );
+}
 
-  const [course, setCourse] = useState<any>(null);
-  const [assignment, setAssignment] = useState<any>(null);
-  const [submission, setSubmission] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
+export default function AssignmentPage() {
+  const t = useTranslations("assignmentPage");
+  const format = useFormatter();
+  const { id, assignmentId } = useParams<{ id: string; assignmentId: string }>();
+  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [submission, setSubmission] = useState<Submission | null>(null);
   const [fileUrl, setFileUrl] = useState("");
+  const [fileName, setFileName] = useState("");
   const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [courseData, assignmentsData, submissionsData] = await Promise.all([
-          api.get(`/courses/${courseId}`),
-          api.get(`/courses/${courseId}/assignments`),
-          api.get(`/submissions`).catch(() => [])
-        ]);
-
-        setCourse(courseData);
-        
-        const currentAssignment = assignmentsData?.find((a: any) => a.id === assignmentId);
-        setAssignment(currentAssignment || null);
-
-        // Find if already submitted
-        if (submissionsData && Array.isArray(submissionsData)) {
-          const existingSubmission = submissionsData.find((s: any) => s.assignmentId === assignmentId);
-          if (existingSubmission) {
-            setSubmission(existingSubmission);
-          }
+    let active = true;
+    void Promise.all([
+      api.get<Assignment[]>(`/learning/courses/${id}/assignments`),
+      api.get<Submission[]>("/learning/submissions"),
+    ])
+      .then(([assignments, submissions]) => {
+        if (!active) return;
+        const selectedAssignment = assignments.find((item) => item.id === assignmentId) || null;
+        if (!selectedAssignment) {
+          throw new Error(t("notFound"));
         }
-      } catch (error) {
-        console.error("Gagal mengambil data tugas", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [courseId, assignmentId]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fileUrl) {
-      toast.error("Tautan file tidak boleh kosong");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const result = await api.post(`/assignments/${assignmentId}/submit`, {
-        fileUrl,
-        description,
+        setAssignment(selectedAssignment);
+        const existing = submissions.find((item) => item.assignmentId === assignmentId) || null;
+        setSubmission(existing);
+        if (existing) {
+          setFileUrl(existing.fileUrl);
+          setFileName(existing.fileName);
+          setDescription(existing.description);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : t("loadError"));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-      setSubmission(result);
-      toast.success("Tugas berhasil dikumpulkan!");
-    } catch (error: any) {
-      toast.error(error.message || "Gagal mengumpulkan tugas");
+
+    return () => {
+      active = false;
+    };
+  }, [id, assignmentId, t]);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const saved = await api.post<Submission>(`/learning/assignments/${assignmentId}/submit`, {
+        fileUrl: fileUrl.trim(),
+        fileName: fileName.trim(),
+        description: description.trim(),
+      });
+      setSubmission(saved);
+      toast.success(t("submitSuccess"));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : t("submitError"));
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
-  };
+  }
 
-  if (loading) {
+  if (loading) return <Skeleton className="mx-auto h-[75vh] max-w-6xl" />;
+
+  if (error || !assignment) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <Card className="mx-auto max-w-xl">
+        <CardHeader>
+          <CardTitle>{t("cannotOpen")}</CardTitle>
+          <CardDescription>{error || t("unavailable")}</CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button variant="outline" asChild>
+            <Link href={`/dashboard/student/courses/${id}`}>
+              <ArrowLeft data-icon="inline-start" /> {t("backToCourse")}
+            </Link>
+          </Button>
+        </CardFooter>
+      </Card>
     );
   }
 
-  if (!course || !assignment) {
-    return (
-      <div className="text-center py-16">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-30" />
-        <p className="text-muted-foreground">Tugas tidak ditemukan</p>
-        <Button variant="outline" className="mt-4" asChild>
-          <Link href={`/dashboard/student/courses/${courseId}`}>Kembali ke Kursus</Link>
-        </Button>
-      </div>
-    );
-  }
-
-  const isGraded = submission && submission.status === "passed" || submission?.status === "failed" || submission?.score > 0;
+  const deadline = new Date(assignment.deadline);
+  const deadlineLabel =
+    assignment.deadline && !Number.isNaN(deadline.getTime())
+      ? format.dateTime(deadline, { dateStyle: "medium", timeStyle: "short" })
+      : t("noDeadline");
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href={`/dashboard/student/courses/${courseId}`}><ArrowLeft className="h-4 w-4" /></Link>
-        </Button>
-        <div>
-          <p className="text-sm text-muted-foreground">{course.title}</p>
-          <h1 className="text-xl font-bold">{assignment.title}</h1>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <Button className="w-fit" variant="ghost" asChild>
+        <Link href={`/dashboard/student/courses/${id}`}>
+          <ArrowLeft data-icon="inline-start" /> {t("backToCourse")}
+        </Link>
+      </Button>
+
+      <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div className="max-w-3xl">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">{assignment.title}</h1>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            {assignment.description || t("defaultDescription")}
+          </p>
         </div>
-      </div>
-
-      <div className="grid md:grid-cols-[1fr_300px] gap-6">
-        <div className="space-y-6">
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg">Detail Tugas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-medium mb-1">Deskripsi</h3>
-                <p className="text-sm text-muted-foreground">{stripHtml(assignment.description)}</p>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="font-medium mb-1">Instruksi</h3>
-                <RichContent html={assignment.instructions || ""} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {submission ? (
-            <Card className="border-0 shadow-md overflow-hidden pt-0">
-              <CardHeader className="bg-emerald-500/10 border-b border-emerald-500/20 p-6">
-                <div className="flex items-start sm:items-center gap-4">
-                  <div className="p-2 bg-emerald-500/20 rounded-full shrink-0">
-                    <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-emerald-800 dark:text-emerald-400 text-lg">Tugas Telah Dikumpulkan</CardTitle>
-                    <CardDescription className="text-emerald-600/90 dark:text-emerald-400/80 mt-1">
-                      Disubmit pada {new Date(submission.submittedAt).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"
-                      })}
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                <div>
-                  <Label className="text-muted-foreground">Tautan Tugas</Label>
-                  <div className="flex items-center gap-2 mt-1 p-3 rounded-lg bg-accent/50">
-                    <LinkIcon className="h-4 w-4 text-primary" />
-                    <a href={submission.fileUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline font-medium truncate">
-                      {submission.fileUrl}
-                    </a>
-                  </div>
-                </div>
-
-                {submission.description && (
-                  <div>
-                    <Label className="text-muted-foreground">Catatan Tambahan</Label>
-                    <div className="mt-1 p-3 rounded-lg bg-accent/50">
-                      <p className="text-sm">{submission.description}</p>
-                    </div>
-                  </div>
-                )}
-
-                {isGraded && (
-                  <div className="mt-6 p-4 rounded-xl border-2 border-primary/20 bg-primary/5">
-                    <h3 className="font-semibold text-lg flex items-center justify-between">
-                      Nilai Tugas
-                      <span className="text-2xl font-bold text-primary">{submission.score || 0}/{assignment.maxScore || 100}</span>
-                    </h3>
-                    {submission.feedback && (
-                      <div className="mt-3 pt-3 border-t border-primary/10">
-                        <p className="text-sm font-medium mb-1">Komentar Pengajar:</p>
-                        <p className="text-sm text-muted-foreground">{submission.feedback}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-0 shadow-md">
-              <CardHeader>
-                <CardTitle className="text-lg">Kumpulkan Tugas</CardTitle>
-                <CardDescription>Masukkan tautan hasil kerja Anda</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="fileUrl">Tautan File (Google Drive, Github, dll) <span className="text-red-500">*</span></Label>
-                    <Input 
-                      id="fileUrl" 
-                      placeholder="https://..." 
-                      value={fileUrl}
-                      onChange={(e) => setFileUrl(e.target.value)}
-                      required
-                    />
-                  </div>
-                  
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Catatan Tambahan (Opsional)</Label>
-                    <Textarea 
-                      id="description" 
-                      placeholder="Tambahkan pesan untuk pengajar..." 
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={4}
-                    />
-                  </div>
-
-                  <Button type="submit" className="w-full gap-2 gradient-primary" disabled={submitting}>
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    Kumpulkan Tugas
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          )}
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">
+            <CalendarDays data-icon="inline-start" /> {deadlineLabel}
+          </Badge>
+          <Badge variant="outline">
+            <Trophy data-icon="inline-start" />
+            {t("maximumScore", { score: assignment.maxScore })}
+          </Badge>
         </div>
+      </header>
 
-        <div className="space-y-6">
-          <Card className="border-0 shadow-md">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Informasi Tenggat Waktu</CardTitle>
+      {submission ? <SubmissionStatus submission={submission} /> : null}
+
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
+        <Card className="min-w-0 [--card-spacing:--spacing(6)]">
+          <CardHeader className="border-b">
+            <CardDescription>{t("workRequired")}</CardDescription>
+            <CardTitle className="text-2xl">{t("briefTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {assignment.instructions ? (
+              <RichContent html={assignment.instructions} />
+            ) : (
+              <p className="text-muted-foreground">{t("noInstructions")}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <form onSubmit={submit} className="lg:sticky lg:top-24">
+          <Card className="[--card-spacing:--spacing(5)]">
+            <CardHeader className="border-b">
+              <CardDescription>
+                {submission ? t("updateProject") : t("sendProject")}
+              </CardDescription>
+              <CardTitle className="text-xl">{t("submissionDetails")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-accent/50">
-                <Clock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-amber-600 dark:text-amber-500">
-                    Batas Pengumpulan
-                  </p>
-                  <p className="text-sm font-semibold mt-1">
-                    {new Date(assignment.deadline).toLocaleDateString("id-ID", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(assignment.deadline).toLocaleTimeString("id-ID", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Nilai Maksimal</span>
-                  <span className="font-bold">{assignment.maxScore || 100} Poin</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Status</span>
-                  {submission ? (
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600">Disubmit</Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600">Belum Disubmit</Badge>
-                  )}
-                </div>
-              </div>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel
+                    htmlFor="file-url"
+                    className="[&_svg]:size-4 [&_svg]:text-muted-foreground"
+                  >
+                    <Link2 /> {t("projectUrl")}
+                  </FieldLabel>
+                  <Input
+                    id="file-url"
+                    type="url"
+                    value={fileUrl}
+                    onChange={(event) => setFileUrl(event.target.value)}
+                    placeholder="https://github.com/nama/proyek"
+                    required
+                  />
+                  <FieldDescription>{t("projectUrlDescription")}</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel
+                    htmlFor="file-name"
+                    className="[&_svg]:size-4 [&_svg]:text-muted-foreground"
+                  >
+                    <FileText /> {t("projectName")}
+                  </FieldLabel>
+                  <Input
+                    id="file-name"
+                    value={fileName}
+                    onChange={(event) => setFileName(event.target.value)}
+                    placeholder={t("projectNamePlaceholder")}
+                    maxLength={255}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel
+                    htmlFor="submission-description"
+                    className="[&_svg]:size-4 [&_svg]:text-muted-foreground"
+                  >
+                    <MessageSquareText /> {t("teacherNote")}
+                  </FieldLabel>
+                  <Textarea
+                    id="submission-description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder={t("teacherNotePlaceholder")}
+                    rows={6}
+                    maxLength={5000}
+                  />
+                </Field>
+                {submission?.fileUrl ? (
+                  <Button type="button" variant="outline" asChild>
+                    <a href={submission.fileUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink data-icon="inline-start" /> {t("openCurrentSubmission")}
+                    </a>
+                  </Button>
+                ) : null}
+              </FieldGroup>
             </CardContent>
+            <CardFooter>
+              <Button type="submit" size="lg" className="w-full" disabled={saving}>
+                {saving ? (
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                ) : submission ? (
+                  <CheckCircle2 data-icon="inline-start" />
+                ) : (
+                  <Send data-icon="inline-start" />
+                )}
+                {saving ? t("sending") : submission ? t("updateSubmission") : t("submitProject")}
+              </Button>
+            </CardFooter>
           </Card>
-        </div>
+        </form>
       </div>
     </div>
   );

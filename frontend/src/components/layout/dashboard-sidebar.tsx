@@ -1,274 +1,182 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAppStore } from "@/lib/store";
+import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
-import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { EduPlatformLogo } from "@/components/brand/edu-platform-logo";
+import { usePlatformBrand } from "@/components/brand/platform-brand-provider";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import {
-  LayoutDashboard,
   BookOpen,
-  Users,
-  GraduationCap,
-  Settings,
-  FileText,
+  BookOpenCheck,
   ClipboardCheck,
-  Trophy,
-  CreditCard,
+  GraduationCap,
+  LayoutDashboard,
+  LibraryBig,
+  SlidersHorizontal,
   Search,
-  ChevronLeft,
-  ChevronRight,
-  Shield,
+  Settings,
+  Trophy,
+  TrendingUp,
   UserCog,
+  Users,
 } from "lucide-react";
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard,
-  BookOpen,
-  Users,
-  GraduationCap,
-  Settings,
-  FileText,
-  ClipboardCheck,
-  Trophy,
-  CreditCard,
-  Search,
-  Shield,
-  UserCog,
-};
-
-interface NavItemConfig {
-  title: string;
-  href: string;
-  icon: string;
-  badge?: number;
-}
-
-const navConfig: Record<string, NavItemConfig[]> = {
-  super_admin: [
-    { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-    { title: "Kelola Kursus", href: "/dashboard/admin/courses", icon: "BookOpen" },
-    { title: "Kelola Pengguna", href: "/dashboard/admin/users", icon: "Users" },
-    { title: "Kelola Pengajar", href: "/dashboard/admin/teachers", icon: "GraduationCap" },
-    { title: "Pengaturan", href: "/dashboard/admin/settings", icon: "Settings" },
-  ],
-  admin: [
-    { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-    { title: "Kelola Kursus", href: "/dashboard/admin/courses", icon: "BookOpen" },
-    { title: "Kelola Pengguna", href: "/dashboard/admin/users", icon: "Users" },
-    { title: "Kelola Pengajar", href: "/dashboard/admin/teachers", icon: "GraduationCap" },
+const navByRole: Record<
+  UserRole,
+  Array<{ titleKey: string; href: string; icon: typeof BookOpen }>
+> = {
+  student: [
+    { titleKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { titleKey: "nav.allCourses", href: "/dashboard/student/browse", icon: Search },
+    { titleKey: "nav.learningProgress", href: "/dashboard/student/courses", icon: BookOpen },
+    { titleKey: "nav.certificates", href: "/dashboard/student/certificates", icon: Trophy },
+    { titleKey: "nav.settings", href: "/dashboard/settings", icon: Settings },
   ],
   teacher: [
-    { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-    { title: "Kursus Saya", href: "/dashboard/teacher/courses", icon: "BookOpen" },
-    { title: "Penilaian", href: "/dashboard/teacher/grading", icon: "ClipboardCheck" },
+    { titleKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { titleKey: "nav.myCourses", href: "/dashboard/teacher/courses", icon: BookOpen },
+    { titleKey: "nav.grading", href: "/dashboard/teacher/grading", icon: ClipboardCheck },
+    { titleKey: "nav.settings", href: "/dashboard/settings", icon: Settings },
   ],
-  student: [
-    { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-    { title: "Kursus Saya", href: "/dashboard/student/courses", icon: "BookOpen" },
-    { title: "Jelajahi Kursus", href: "/dashboard/student/browse", icon: "Search" },
-    { title: "Pembayaran", href: "/dashboard/student/payments", icon: "CreditCard" },
-    { title: "Sertifikat", href: "/dashboard/student/certificates", icon: "Trophy" },
+  admin: [
+    { titleKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { titleKey: "nav.allCourses", href: "/dashboard/admin/courses", icon: LibraryBig },
+    { titleKey: "nav.manageMaterials", href: "/dashboard/teacher/materials", icon: BookOpenCheck },
+    { titleKey: "nav.users", href: "/dashboard/admin/users", icon: Users },
+    { titleKey: "nav.teachers", href: "/dashboard/admin/teachers", icon: GraduationCap },
+    { titleKey: "nav.studentProgress", href: "/dashboard/admin/progress", icon: TrendingUp },
+    { titleKey: "nav.platform", href: "/dashboard/admin/settings", icon: SlidersHorizontal },
+    { titleKey: "nav.account", href: "/dashboard/settings", icon: UserCog },
   ],
-};
-
-const roleLabels: Record<string, string> = {
-  super_admin: "Super Admin",
-  admin: "Admin",
-  teacher: "Pengajar",
-  student: "Siswa",
-};
-
-const roleColors: Record<string, string> = {
-  super_admin: "bg-red-500/10 text-red-500 border-red-500/20",
-  admin: "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  teacher: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  student: "bg-green-500/10 text-green-500 border-green-500/20",
+  super_admin: [
+    { titleKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { titleKey: "nav.allCourses", href: "/dashboard/admin/courses", icon: LibraryBig },
+    { titleKey: "nav.manageMaterials", href: "/dashboard/teacher/materials", icon: BookOpenCheck },
+    { titleKey: "nav.grading", href: "/dashboard/teacher/grading", icon: ClipboardCheck },
+    { titleKey: "nav.users", href: "/dashboard/admin/users", icon: Users },
+    { titleKey: "nav.teachers", href: "/dashboard/admin/teachers", icon: GraduationCap },
+    { titleKey: "nav.studentProgress", href: "/dashboard/admin/progress", icon: TrendingUp },
+    { titleKey: "nav.platform", href: "/dashboard/admin/settings", icon: SlidersHorizontal },
+    { titleKey: "nav.account", href: "/dashboard/settings", icon: UserCog },
+  ],
 };
 
 export function DashboardSidebar() {
+  const t = useTranslations();
   const { data: session } = useSession();
   const pathname = usePathname();
-  const { currentRole, sidebarOpen, toggleSidebar, setCurrentRole } = useAppStore();
-  const userName = session?.user?.name || "Pengguna";
-  const items = navConfig[currentRole] || [];
+  const { isMobile, setOpenMobile } = useSidebar();
+  const { settings: platform } = usePlatformBrand();
+  const role = session?.user.role || "student";
+  const userName = session?.user.name || t("common.user");
 
-  const [pendingGrading, setPendingGrading] = useState(0);
-
-  // Sync current role from session (only on login/session change, not on manual switch)
-  useEffect(() => {
-    const sessionRole = (session?.user as any)?.role;
-    if (sessionRole) {
-      setCurrentRole(sessionRole);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
-
-  useEffect(() => {
-    if (currentRole === "teacher") {
-      api.get("/submissions/teacher")
-        .then(data => {
-          if (Array.isArray(data)) {
-            setPendingGrading(data.filter(s => s.status === "submitted").length);
-          }
-        })
-        .catch(err => console.error("Failed to fetch pending submissions for sidebar", err));
-    }
-  }, [currentRole, pathname]);
+  function closeMobileSidebar() {
+    if (isMobile) setOpenMobile(false);
+  }
 
   return (
-    <>
-      {/* Mobile Backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden" 
-          onClick={toggleSidebar}
-        />
-      )}
-      
-      <aside
-        className={cn(
-          "fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300 flex flex-col",
-          // On mobile: hidden unless open. On desktop: toggle between 64 and 70px width
-          sidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 lg:translate-x-0 lg:w-[70px]"
-        )}
-      >
-        {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
-          {/* Always show full logo on mobile if sidebar is open, or if desktop and sidebar open */}
-          <Link href="/dashboard" className={cn("flex items-center gap-2", (!sidebarOpen && "lg:hidden") && "hidden")}>
-            <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center">
-              <GraduationCap className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-bold text-lg gradient-text">EduPlatform</span>
+    <Sidebar collapsible="icon" className="border-r-2">
+      <SidebarHeader className="h-18 justify-center border-b p-2">
+        <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center">
+          <Link
+            href="/"
+            aria-label={t("nav.homeAria", { platform: platform.name })}
+            onClick={closeMobileSidebar}
+            className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden"
+          >
+            <EduPlatformLogo markClassName="size-8" wordmarkClassName="text-base" />
           </Link>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className={cn("h-8 w-8 shrink-0", !sidebarOpen && "hidden lg:flex lg:mx-auto")}
-          >
-            {sidebarOpen ? (
-              <ChevronLeft className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </Button>
+          <SidebarTrigger
+            className="shrink-0 group-data-[collapsible=icon]:mx-auto"
+            aria-label={t("nav.toggleSidebar")}
+          />
         </div>
+      </SidebarHeader>
 
-        {/* Navigation */}
-        <ScrollArea className="flex-1 py-4">
-          <nav className="space-y-1 px-3">
-            {items.map((baseItem) => {
-              const item = { ...baseItem };
-              if (item.href === "/dashboard/teacher/grading" && pendingGrading > 0) {
-                item.badge = pendingGrading;
-              }
-              const Icon = iconMap[item.icon] || LayoutDashboard;
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-              // We only use minimal mode (icon only) on desktop when sidebar is closed
-              const isMinimal = !sidebarOpen;
-
-              const navLink = (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isMinimal && "lg:justify-center lg:px-2"
-                  )}
-                  onClick={() => {
-                    // Close sidebar on mobile after navigating
-                    if (window.innerWidth < 1024) toggleSidebar();
-                  }}
-                >
-                  <Icon className={cn("h-5 w-5 shrink-0", isActive && "drop-shadow-sm")} />
-                  <div className={cn("flex-1 flex items-center justify-between", isMinimal && "lg:hidden")}>
-                    <span>{item.title}</span>
-                    {item.badge && (
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "h-5 min-w-5 flex items-center justify-center text-xs",
-                          isActive
-                            ? "bg-white/20 text-white"
-                            : "bg-primary/10 text-primary"
-                        )}
-                      >
-                        {item.badge}
-                      </Badge>
-                    )}
-                  </div>
-                </Link>
-              );
-
-              if (isMinimal) {
+      <SidebarContent>
+        <SidebarGroup className="p-3 group-data-[collapsible=icon]:p-2">
+          <SidebarGroupLabel className="font-extrabold uppercase tracking-[.16em]">
+            {t("nav.mainMenu")}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-1.5 group-data-[collapsible=icon]:items-center">
+              {navByRole[role].map(({ titleKey, href, icon: Icon }) => {
+                const active =
+                  pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+                const title = t(titleKey);
                 return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger className="w-full hidden lg:block">{navLink}</TooltipTrigger>
-                    <TooltipTrigger className="w-full lg:hidden">{navLink}</TooltipTrigger>
-                    <TooltipContent side="right" className="flex items-center gap-2">
-                      {item.title}
-                      {item.badge && (
-                        <Badge variant="secondary" className="h-5 min-w-5 text-xs">
-                          {item.badge}
-                        </Badge>
+                  <SidebarMenuItem
+                    key={`${href}-${titleKey}`}
+                    className="group-data-[collapsible=icon]:w-fit"
+                  >
+                    <SidebarMenuButton
+                      size="lg"
+                      isActive={active}
+                      tooltip={title}
+                      render={<Link href={href} onClick={closeMobileSidebar} />}
+                      className={cn(
+                        "rounded-xl font-semibold group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:rounded-full",
+                        active &&
+                          "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
                       )}
-                    </TooltipContent>
-                  </Tooltip>
+                    >
+                      <Icon />
+                      <span className="group-data-[collapsible=icon]:hidden">{title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 );
-              }
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
-              return navLink;
-            })}
-          </nav>
-        </ScrollArea>
-
-        {/* User Info */}
-        <div className="border-t border-sidebar-border p-3">
-          <div
-            className={cn(
-              "flex items-center gap-3 rounded-lg p-2",
-              !sidebarOpen && "lg:justify-center"
-            )}
-          >
-            <Avatar className="h-9 w-9 shrink-0 ring-2 ring-primary/20">
-              <AvatarImage src={session?.user?.image || ""} alt={userName} />
-              <AvatarFallback className="gradient-primary text-white text-xs">
-                {userName.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className={cn("flex-1 overflow-hidden", !sidebarOpen && "lg:hidden")}>
-              <p className="text-sm font-semibold truncate">{userName}</p>
-              <Badge
-                variant="outline"
-                className={cn("text-[10px] px-1.5 py-0", roleColors[currentRole])}
-              >
-                {roleLabels[currentRole]}
-              </Badge>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </>
+      <SidebarFooter className="border-t p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              tooltip={`${userName} · ${t(`roles.${role}`)}`}
+              render={<Link href="/dashboard/settings" onClick={closeMobileSidebar} />}
+              className="h-14 rounded-xl group-data-[collapsible=icon]:justify-center"
+            >
+              <Avatar className="size-9 group-data-[collapsible=icon]:size-8">
+                <AvatarImage src={session?.user.image || ""} />
+                <AvatarFallback className="bg-secondary font-bold text-secondary-foreground">
+                  {userName.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                <span className="block truncate text-sm font-bold">{userName}</span>
+                <Badge variant="outline" className="mt-1 text-[10px]">
+                  {t(`roles.${role}`)}
+                </Badge>
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   );
 }

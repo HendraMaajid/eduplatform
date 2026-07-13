@@ -38,29 +38,31 @@ func InitDB() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// Configure connection pool for remote database (Supabase)
+	// Configure the PostgreSQL application connection pool.
 	sqlDB, err := DB.DB()
 	if err != nil {
 		log.Fatal("Failed to get underlying sql.DB:", err)
 	}
 
 	sqlDB.SetMaxOpenConns(25)                  // Max open connections
-	sqlDB.SetMaxIdleConns(15)                   // Keep 5 idle connections ready
+	sqlDB.SetMaxIdleConns(15)                  // Keep 5 idle connections ready
 	sqlDB.SetConnMaxLifetime(30 * time.Minute) // Recycle connections every 30 min
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)  // Close idle connections after 5 min
 
 	fmt.Println("Connected to database successfully")
 
-	// Auto Migrate — only run in development or when explicitly enabled
-	if os.Getenv("SKIP_MIGRATION") != "true" {
+	// AutoMigrate is additive-only and intended for development. Production
+	// schema changes are applied by cmd/migrate before the API starts.
+	isProduction := os.Getenv("APP_ENV") == "production" || os.Getenv("GIN_MODE") == "release"
+	shouldAutoMigrate := !isProduction && os.Getenv("AUTO_MIGRATE") == "true"
+	if shouldAutoMigrate {
 		// Enable pgvector extension for AI RAG feature
 		if execErr := DB.Exec("CREATE EXTENSION IF NOT EXISTS vector").Error; execErr != nil {
 			log.Printf("Warning: could not enable pgvector extension: %v", execErr)
 			log.Println("AI Chat RAG vector search will fall back to keyword search")
 		}
 
-		// Clean duplicates before migrate to prevent unique index creation failures
-		DB.Exec(`DELETE FROM payments a USING payments b WHERE a.ctid > b.ctid AND a.course_id = b.course_id AND a.student_id = b.student_id`)
+		// Clean duplicate submissions before creating the unique index.
 		DB.Exec(`DELETE FROM submissions a USING submissions b WHERE a.ctid > b.ctid AND a.assignment_id = b.assignment_id AND a.student_id = b.student_id`)
 
 		err = DB.AutoMigrate(
@@ -74,21 +76,33 @@ func InitDB() {
 			&model.QuizAnswer{},
 			&model.Assignment{},
 			&model.Submission{},
-			&model.Enrollment{},
-			&model.Payment{},
+			&model.LearningProgress{},
 			&model.Certificate{},
 			&model.Notification{},
 			&model.ModuleEmbedding{},
 			&model.RefreshToken{},
 			&model.Rating{},
+			&model.PlatformSettings{},
+			&model.UserPreference{},
 		)
 
 		if err != nil {
 			log.Fatal("Failed to auto migrate database:", err)
 		}
 
+		settings := model.PlatformSettings{
+			ID: 1, Name: "EduPlatform",
+			DescriptionID: "Platform belajar teknologi 100% gratis untuk semua.",
+			DescriptionEN: "A 100% free technology learning platform for everyone.",
+			SupportEmail:  "support@eduplatform.id", DefaultLocale: "id", CertificateIssuer: "EduPlatform",
+			NotifyNewRegistration: true, NotifyNewSubmission: true, NotifyGradePublished: true,
+		}
+		if err := DB.FirstOrCreate(&settings, model.PlatformSettings{ID: 1}).Error; err != nil {
+			log.Printf("Warning: could not initialize platform settings: %v", err)
+		}
+
 		fmt.Println("Database migration completed")
 	} else {
-		fmt.Println("Skipping database migration (SKIP_MIGRATION=true)")
+		fmt.Println("Skipping AutoMigrate; run cmd/migrate for versioned schema changes")
 	}
 }

@@ -4,12 +4,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"backend/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
 func GetAdminDashboard(c *gin.Context) {
-	stats, err := service.GetAdminStats()
+	stats, err := service.GetAdminStats(c.Request.Context())
 	if err != nil {
 		log.Printf("GetAdminDashboard error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load dashboard"})

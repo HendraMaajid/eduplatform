@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/google/uuid"
 	"backend/internal/model"
 	"backend/pkg/database"
+	"github.com/google/uuid"
 )
 
 func CreateNotification(userID string, title string, message string, notifType string, link string) error {
@@ -15,7 +15,7 @@ func CreateNotification(userID string, title string, message string, notifType s
 		Type:    notifType,
 		Link:    link,
 	}
-	
+
 	result := database.DB.Create(&notification)
 	return result.Error
 }

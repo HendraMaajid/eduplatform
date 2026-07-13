@@ -41,7 +41,6 @@ func seedCourses(ctx *seedContext) error {
 			Slug:             ct.Slug,
 			Description:      ct.Description,
 			ShortDescription: ct.ShortDescription,
-			Price:            ct.Price,
 			Category:         ct.Category,
 			Level:            ct.Level,
 			Status:           ct.Status,

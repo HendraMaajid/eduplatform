@@ -27,14 +27,16 @@ func HandleChat(c *gin.Context) {
 		return
 	}
 
-	// Verify user is enrolled in the course
-	var enrollmentCount int64
-	database.DB.Table("enrollments").
-		Where("student_id = ? AND course_id = ? AND deleted_at IS NULL", userID, req.CourseID).
-		Count(&enrollmentCount)
+	// The course must be published and opened by this student. Starting any
+	// Published courses are free and learning state is tracked through progress.
+	var learningCount int64
+	database.DB.Table("learning_progresses").
+		Joins("JOIN courses ON courses.id = learning_progresses.course_id").
+		Where("learning_progresses.student_id = ? AND learning_progresses.course_id = ? AND courses.status = 'published' AND courses.deleted_at IS NULL", userID, req.CourseID).
+		Count(&learningCount)
 
-	if enrollmentCount == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Anda harus terdaftar di kursus ini untuk menggunakan AI Chat"})
+	if learningCount == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Mulai course ini sebelum menggunakan teman belajar AI"})
 		return
 	}
 

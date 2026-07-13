@@ -1,210 +1,127 @@
 "use client";
-
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import {
-  BookOpen,
-  Users,
-  ClipboardCheck,
-  Star,
-  ArrowRight,
-  Clock,
-  FileText,
-  Loader2,
-} from "lucide-react";
 import Link from "next/link";
-import { motion } from "motion/react";
-
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
-
+import { useTranslations } from "next-intl";
+import { api } from "@/lib/api";
+import type { Course, PaginatedResponse, Submission, TeacherStats } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardLoadError } from "./dashboard-load-error";
+import { ArrowRight, BookOpen, ClipboardCheck, Star, Users } from "lucide-react";
 export function TeacherDashboard() {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>({
-    totalCourses: 0,
-    totalStudents: 0,
-    pendingSubmissions: 0,
-  });
-  const [courses, setCourses] = useState<any[]>([]);
-  const [pendingSubmissions, setPendingSubmissions] = useState<any[]>([]);
-
+  const t = useTranslations("teacherOverview");
+  const [stats, setStats] = useState<TeacherStats | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [error, setError] = useState("");
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsData, coursesData, submissionsData] = await Promise.all([
-          api.get("/dashboard/teacher"),
-          api.get("/users/me").then(user => api.get(`/courses?teacherId=${user.id}`)),
-          api.get("/submissions/teacher")
-        ]);
-        setStats(statsData);
-        
-        const coursesList = Array.isArray(coursesData) ? coursesData : (coursesData?.data || []);
-        setCourses(coursesList.slice(0, 3));
-
-        const submissionsList = Array.isArray(submissionsData) ? submissionsData : (submissionsData?.data || []);
-        setPendingSubmissions(submissionsList.filter((s: any) => s.status === "submitted").slice(0, 5));
-      } catch (error) {
-        console.error("Failed to fetch teacher dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  const statCards = [
-    { title: "Kursus Saya", value: stats.totalCourses?.toString() || "0", icon: BookOpen, bgColor: "bg-indigo-500/10", iconColor: "text-indigo-500" },
-    { title: "Total Siswa", value: stats.totalStudents?.toString() || "0", icon: Users, bgColor: "bg-violet-500/10", iconColor: "text-violet-500" },
-    { title: "Menunggu Penilaian", value: stats.pendingSubmissions?.toString() || "0", icon: ClipboardCheck, bgColor: "bg-amber-500/10", iconColor: "text-amber-500" },
-    { title: "Rating Rata-rata", value: "4.8", icon: Star, bgColor: "bg-emerald-500/10", iconColor: "text-emerald-500" },
-  ];
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
+    Promise.all([
+      api.get<TeacherStats>("/dashboard/teacher"),
+      api.get<PaginatedResponse<Course>>("/manage/courses?limit=4"),
+      api.get<Submission[]>("/manage/submissions"),
+    ])
+      .then(([s, c, sub]) => {
+        setStats(s);
+        setCourses(c.data);
+        setSubmissions(sub.filter((x) => x.status === "submitted"));
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : t("loadError"));
+      });
+  }, [t]);
+  if (error) return <DashboardLoadError message={error} />;
+  if (!stats) return <Skeleton className="h-96" />;
   return (
-    <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
-      <motion.div variants={item}>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard Pengajar</h1>
-        <p className="text-muted-foreground">Kelola kursus dan pantau progress siswa Anda</p>
-      </motion.div>
-
-      {/* Stats */}
-      <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={container} initial="hidden" animate="show">
-        {statCards.map((stat) => (
-          <motion.div key={stat.title} variants={item}>
-            <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.bgColor} rounded-xl p-3`}>
-                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                  </div>
+    <div className="space-y-7">
+      <div>
+        <p className="text-sm font-bold uppercase tracking-[.16em] text-primary">{t("eyebrow")}</p>
+        <h1 className="mt-1 text-3xl font-extrabold">{t("title")}</h1>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          [t("courses"), stats.totalCourses, BookOpen],
+          [t("learningStudents"), stats.totalStudents, Users],
+          [t("pendingGrading"), stats.pendingSubmissions, ClipboardCheck],
+          [t("rating"), stats.averageRating || 0, Star],
+        ].map(([l, v, I]) => {
+          const Icon = I as typeof BookOpen;
+          return (
+            <Card key={l as string} className="border-2">
+              <CardContent className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{l as string}</p>
+                  <p className="text-3xl font-extrabold">{v as number}</p>
                 </div>
+                <Icon className="size-7 text-primary" />
               </CardContent>
             </Card>
-          </motion.div>
-        ))}
-      </motion.div>
-
-      <motion.div className="grid gap-6 lg:grid-cols-2" variants={container} initial="hidden" animate="show">
-        {/* My Courses */}
-        <motion.div variants={item}>
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Kursus Saya</CardTitle>
-                <CardDescription>Kursus yang Anda ajar</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" className="gap-1" asChild>
+          );
+        })}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-2">
+          <CardContent>
+            <div className="mb-4 flex justify-between">
+              <h2 className="font-extrabold">{t("recentCourses")}</h2>
+              <Button variant="ghost" asChild>
                 <Link href="/dashboard/teacher/courses">
-                  Lihat Semua <ArrowRight className="h-4 w-4" />
+                  {t("manage")}
+                  <ArrowRight />
                 </Link>
               </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {courses.length > 0 ? courses.map((course) => (
-                  <div key={course.id} className="flex items-center gap-4 p-3 rounded-lg bg-accent/50 hover:bg-accent transition-colors">
-                    {course.thumbnail ? (
-                      <img 
-                        src={course.thumbnail.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${course.thumbnail}` : course.thumbnail} 
-                        alt={course.title} 
-                        className="h-12 w-12 rounded-lg object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-                        <BookOpen className="h-6 w-6 text-white" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{course.title}</p>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {course.enrolledStudents || 0} siswa
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <FileText className="h-3 w-3" />
-                          {course.totalModules || 0} modul
-                        </span>
-                      </div>
-                    </div>
-                    <Badge variant={course.status === "published" ? "default" : "secondary"}>
-                      {course.status === "published" ? "Aktif" : "Draft"}
-                    </Badge>
-                  </div>
-                )) : (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <p className="text-sm">Belum ada kursus</p>
-                  </div>
-                )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Pending Submissions */}
-        <motion.div variants={item}>
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Menunggu Penilaian</CardTitle>
-                <CardDescription>Tugas yang perlu Anda nilai</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" className="gap-1" asChild>
+            </div>
+            {courses.map((c) => (
+              <Link
+                key={c.id}
+                href={`/dashboard/teacher/courses/${c.id}`}
+                className="flex items-center justify-between border-t py-3"
+              >
+                <span className="font-semibold">{c.title}</span>
+                <span className="text-xs text-muted-foreground">{c.status}</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="border-2">
+          <CardContent>
+            <div className="mb-4 flex justify-between">
+              <h2 className="font-extrabold">{t("gradingQueue")}</h2>
+              <Button variant="ghost" asChild>
                 <Link href="/dashboard/teacher/grading">
-                  Nilai Sekarang <ArrowRight className="h-4 w-4" />
+                  {t("open")}
+                  <ArrowRight />
                 </Link>
               </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {pendingSubmissions.length > 0 ? (
-                pendingSubmissions.map((sub: any) => (
-                  <div key={sub.id} className="flex items-center gap-4 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 transition-colors">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={sub.student?.avatar} />
-                      <AvatarFallback>{sub.student?.name?.slice(0, 2).toUpperCase() || "S"}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{sub.student?.name || "Siswa"}</p>
-                      <p className="text-xs text-muted-foreground">{sub.fileName || "File Tugas"}</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="outline" className="text-amber-500 border-amber-500/30 text-xs">
-                        <Clock className="h-3 w-3 mr-1" />
-                        Menunggu
-                      </Badge>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ClipboardCheck className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Semua tugas sudah dinilai!</p>
+            </div>
+            {submissions.length ? (
+              submissions.slice(0, 5).map((s) => (
+                <div key={s.id} className="border-t py-3">
+                  <p className="font-semibold">{s.student?.name || t("student")}</p>
+                  <p className="text-xs text-muted-foreground">{s.assignment?.title}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </motion.div>
-    </motion.div>
+              ))
+            ) : (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <ClipboardCheck />
+                  </EmptyMedia>
+                  <EmptyTitle>{t("allGraded")}</EmptyTitle>
+                  <EmptyDescription>{t("noPendingSubmissions")}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

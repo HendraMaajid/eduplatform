@@ -31,12 +31,12 @@ func seedRatings(ctx *seedContext) error {
 	}
 
 	rng := ctx.Cfg.RNG
-	enrollments := ctx.Enrollments.Enrollments
+	progresses := ctx.Progress.Progresses
 
-	// Only rate from completed/certified or in_progress enrollments
-	var eligible []model.Enrollment
-	for _, e := range enrollments {
-		if e.Status == "certified" || e.Progress >= 50 {
+	// Only rate sufficiently active or completed learners.
+	var eligible []model.LearningProgress
+	for _, e := range progresses {
+		if e.Status == "certified" || e.Progress >= 25 {
 			eligible = append(eligible, e)
 		}
 	}
@@ -61,7 +61,7 @@ func seedRatings(ctx *seedContext) error {
 	}
 
 	if len(ratings) == 0 {
-		log.Println("[seed] ratings: 0 (no eligible enrollments)")
+		log.Println("[seed] ratings: 0 (no eligible learning progress)")
 		return nil
 	}
 

@@ -8,18 +8,18 @@ import (
 )
 
 type Assignment struct {
-	ID               uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	CourseID         uuid.UUID      `gorm:"type:uuid;not null;index" json:"courseId"`
-	Course           *Course        `gorm:"foreignKey:CourseID" json:"course,omitempty"`
-	Title            string         `gorm:"size:255;not null" json:"title"`
-	Description      string         `gorm:"type:text" json:"description"`
-	Instructions     string         `gorm:"type:text" json:"instructions"`
-	Deadline         time.Time      `gorm:"index" json:"deadline"`
-	MaxScore         int            `gorm:"default:100" json:"maxScore"`
-	IsPublished      bool           `gorm:"default:false" json:"isPublished"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"-"`
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	CourseID     uuid.UUID      `gorm:"type:uuid;not null;index" json:"courseId"`
+	Course       *Course        `gorm:"foreignKey:CourseID" json:"course,omitempty"`
+	Title        string         `gorm:"size:255;not null" json:"title"`
+	Description  string         `gorm:"type:text" json:"description"`
+	Instructions string         `gorm:"type:text" json:"instructions"`
+	Deadline     time.Time      `gorm:"index" json:"deadline"`
+	MaxScore     int            `gorm:"default:100" json:"maxScore"`
+	IsPublished  bool           `gorm:"default:false" json:"isPublished"`
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"-"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
 	TotalSubmissions int `gorm:"-" json:"totalSubmissions"`
 }

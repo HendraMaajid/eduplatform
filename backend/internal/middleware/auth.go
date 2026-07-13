@@ -1,17 +1,39 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 
+	"backend/internal/service"
+	"backend/pkg/database"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"backend/internal/service"
 )
 
+type userRoleLookup func(context.Context, string) (string, error)
+
+func loadCurrentUserRole(ctx context.Context, userID string) (string, error) {
+	var result struct {
+		Role string
+	}
+	if err := database.DB.WithContext(ctx).
+		Table("users").
+		Select("role").
+		Where("id = ? AND deleted_at IS NULL", userID).
+		Take(&result).Error; err != nil {
+		return "", err
+	}
+	return result.Role, nil
+}
+
 func RequireAuth() gin.HandlerFunc {
+	return requireAuthWithUserLookup(loadCurrentUserRole)
+}
+
+func requireAuthWithUserLookup(lookup userRoleLookup) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -30,7 +52,7 @@ func RequireAuth() gin.HandlerFunc {
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 			// Validate signing method to prevent algorithm confusion attacks
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			secret := os.Getenv("JWT_SECRET")
@@ -38,16 +60,24 @@ func RequireAuth() gin.HandlerFunc {
 				return nil, fmt.Errorf("JWT_SECRET not configured")
 			}
 			return []byte(secret), nil
-		})
+		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(service.JWTIssuer()), jwt.WithAudience(service.JWTAudience()))
 
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			return
 		}
 
-		// Set user info to context
+		// Re-check the user on every protected request so deleted accounts and
+		// role changes take effect immediately instead of waiting for JWT expiry.
+		currentRole, err := lookup(c.Request.Context(), claims.UserID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Account is no longer active"})
+			return
+		}
+
+		// Set current database identity rather than trusting a potentially stale role claim.
 		c.Set("userID", claims.UserID)
-		c.Set("role", claims.Role)
+		c.Set("role", currentRole)
 		c.Next()
 	}
 }
@@ -74,7 +104,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 				break
 			}
 		}
-		
+
 		// Super admin can access everything
 		if roleStr == "super_admin" {
 			allowed = true

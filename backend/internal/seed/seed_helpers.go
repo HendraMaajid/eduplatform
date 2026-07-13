@@ -1,14 +1,11 @@
 package seed
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"math"
 	mrand "math/rand"
 	"regexp"
 	"strings"
-	"time"
 )
 
 func newSeededRand() *mrand.Rand {
@@ -85,16 +82,4 @@ func randomInRange(rng *mrand.Rand, min, max int) int {
 		return min
 	}
 	return min + rng.Intn(max-min+1)
-}
-
-func randomTimeWithin(rng *mrand.Rand, daysAgoMin, daysAgoMax int) time.Time {
-	days := randomInRange(rng, daysAgoMin, daysAgoMax)
-	hours := rng.Intn(24)
-	return time.Now().AddDate(0, 0, -days).Add(-time.Duration(hours) * time.Hour)
-}
-
-func genCertificateNumber() string {
-	b := make([]byte, 6)
-	rand.Read(b)
-	return fmt.Sprintf("CERT-%s-%s", time.Now().Format("20060102"), hex.EncodeToString(b))
 }

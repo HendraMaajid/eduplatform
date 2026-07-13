@@ -1,162 +1,146 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import type { Course, PaginatedResponse } from "@/lib/types";
+import { CourseThumbnail } from "@/components/course/course-thumbnail";
+import { CourseEditor } from "@/components/manage/course-editor";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { BookOpen, Users, FileText, Plus, ArrowRight, Star, Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { useDebounce } from "@/hooks/use-debounce";
-import { PaginationMeta } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { PaginationControl } from "@/components/ui/pagination-control";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus } from "lucide-react";
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  published: { label: "Aktif", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
-  draft: { label: "Draft", className: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
-};
+const PAGE_SIZE = 8;
 
 export default function TeacherCoursesPage() {
-  const [courses, setCourses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const t = useTranslations("teacherCourses");
+  const [items, setItems] = useState<Course[] | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 500);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, page: 1, limit: 12, totalPages: 1 });
-
-  useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
+  const loadCourses = useCallback(
+    async (targetPage: number) => {
+      try {
+        const response = await api.get<PaginatedResponse<Course>>(
+          `/manage/courses?page=${targetPage}&limit=${PAGE_SIZE}`,
+        );
+        setItems(response.data);
+        setTotal(response.meta.total);
+        setTotalPages(Math.max(1, response.meta.totalPages));
+      } catch (cause) {
+        toast.error(cause instanceof Error ? cause.message : t("loadError"));
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setLoading(true);
-        const user = await api.get("/users/me");
-        
-        const query = new URLSearchParams({
-          teacherId: user.id,
-          page: currentPage.toString(),
-          limit: "12",
-          search: debouncedSearch
-        }).toString();
-
-        const response = await api.get(`/courses?${query}`);
-        setCourses(response.data || []);
-        if (response.meta) setMeta(response.meta);
-      } catch (error) {
-        console.error("Failed to fetch teacher courses", error);
-      } finally {
-        setLoading(false);
-      }
+    let active = true;
+    void api
+      .get<PaginatedResponse<Course>>(`/manage/courses?page=${page}&limit=${PAGE_SIZE}`)
+      .then((response) => {
+        if (!active) return;
+        setItems(response.data);
+        setTotal(response.meta.total);
+        setTotalPages(Math.max(1, response.meta.totalPages));
+      })
+      .catch((cause) => {
+        if (active) {
+          toast.error(cause instanceof Error ? cause.message : t("loadError"));
+        }
+      });
+    return () => {
+      active = false;
     };
-    fetchCourses();
-  }, [currentPage, debouncedSearch]);
+  }, [page, t]);
 
+  async function handleCourseCreated() {
+    setCreating(false);
+    if (page === 1) {
+      await loadCourses(1);
+    } else {
+      setPage(1);
+    }
+  }
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Kursus Saya</h1>
-          <p className="text-muted-foreground">Kelola kursus yang Anda ajar</p>
+          <p className="text-sm font-bold uppercase tracking-[.16em] text-primary">
+            {t("eyebrow")}
+          </p>
+          <h1 className="mt-1 text-3xl font-extrabold">{t("title")}</h1>
         </div>
+        <Button onClick={() => setCreating(!creating)}>
+          <Plus />
+          {creating ? t("close") : t("newCourse")}
+        </Button>
       </div>
-
-      <Card className="border-0 shadow-md">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Cari kursus saya..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : courses.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed rounded-xl">
-          <BookOpen className="h-12 w-12 mx-auto text-muted-foreground opacity-50 mb-4" />
-          <h3 className="text-lg font-semibold">Belum Ada Kursus</h3>
-          <p className="text-muted-foreground mb-4">Anda belum ditugaskan ke kursus manapun atau tidak ada yang sesuai pencarian.</p>
-        </div>
+      {creating ? <CourseEditor onSaved={handleCourseCreated} /> : null}
+      {items === null ? (
+        <Skeleton className="h-72" />
       ) : (
-        <div className="space-y-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course) => {
-              const status = statusConfig[course.status] || statusConfig.draft;
-              return (
-                <Card key={course.id} className="group border-0 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-                  <div className={`relative h-36 overflow-hidden ${!course.thumbnail ? 'gradient-primary' : 'bg-muted'}`}>
-                    {course.thumbnail ? (
-                      <img 
-                        src={course.thumbnail.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${course.thumbnail}` : course.thumbnail} 
-                        alt={course.title} 
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <BookOpen className="h-14 w-14 text-white/20" />
-                      </div>
-                    )}
-                    <div className="absolute top-3 right-3">
-                      <Badge className={`${status.className} border`}>{status.label}</Badge>
-                    </div>
-                    {course.rating > 0 && (
-                      <div className="absolute bottom-3 left-3">
-                        <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30 gap-1">
-                          <Star className="h-3 w-3 fill-current" /> {course.rating}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-                  <CardContent className="p-5 space-y-4">
-                    <div>
-                      <Badge variant="outline" className="text-xs mb-2">{course.category || "Umum"}</Badge>
-                      <h3 className="font-semibold line-clamp-1">{course.title}</h3>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-lg bg-accent/50 p-2">
-                        <p className="text-lg font-bold text-primary">{course.totalModules || 0}</p>
-                        <p className="text-[10px] text-muted-foreground">Modul</p>
-                      </div>
-                      <div className="rounded-lg bg-accent/50 p-2">
-                        <p className="text-lg font-bold text-primary">{course.totalQuizzes || 0}</p>
-                        <p className="text-[10px] text-muted-foreground">Kuis</p>
-                      </div>
-                      <div className="rounded-lg bg-accent/50 p-2">
-                        <p className="text-lg font-bold text-primary">{course.enrolledStudents || 0}</p>
-                        <p className="text-[10px] text-muted-foreground">Siswa</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button size="sm" className="flex-1 gap-1" asChild>
-                        <Link href={`/dashboard/teacher/courses/${course.id}`}>
-                          Kelola <ArrowRight className="h-3 w-3" />
+        <div className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            {items.map((c) => (
+              <Card key={c.id} className="border-2 py-0">
+                <div className="grid sm:grid-cols-[10rem_minmax(0,1fr)]">
+                  <CourseThumbnail
+                    thumbnail={c.thumbnail}
+                    title={c.title}
+                    className="min-h-40 rounded-none border-x-0 border-t-0 sm:aspect-auto sm:h-full sm:border-r sm:border-b-0"
+                  />
+                  <div className="flex min-w-0 flex-col py-4">
+                    <CardHeader className="grid-cols-[1fr_auto]">
+                      <Badge variant="outline" className="w-fit">
+                        {t(`statuses.${c.status}`)}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {t("students", { count: c.enrolledStudents || 0 })}
+                      </span>
+                      <CardTitle className="col-span-2 line-clamp-2 text-xl font-extrabold">
+                        {c.title}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="mt-2 flex-1">
+                      <p className="line-clamp-2 text-sm text-muted-foreground">
+                        {c.shortDescription || t("noSummary")}
+                      </p>
+                    </CardContent>
+                    <CardFooter className="mt-4 border-0 bg-transparent py-0">
+                      <Button asChild>
+                        <Link href={`/dashboard/teacher/courses/${c.id}`}>
+                          {t("manageMaterials")}
                         </Link>
                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardFooter>
+                  </div>
+                </div>
+              </Card>
+            ))}
           </div>
-
-          {meta.totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 border-t border-border">
+          {total > 0 ? (
+            <div className="flex flex-col justify-between gap-3 rounded-xl border bg-card px-4 py-3 sm:flex-row sm:items-center">
               <p className="text-sm text-muted-foreground">
-                Menampilkan {(meta.page - 1) * meta.limit + 1} - {Math.min(meta.page * meta.limit, meta.total)} dari {meta.total} kursus
+                {t("range", {
+                  from: (page - 1) * PAGE_SIZE + 1,
+                  to: Math.min(page * PAGE_SIZE, total),
+                  total,
+                })}
               </p>
-              <PaginationControl 
-                currentPage={currentPage} 
-                totalPages={meta.totalPages} 
-                onPageChange={setCurrentPage} 
+              <PaginationControl
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
               />
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

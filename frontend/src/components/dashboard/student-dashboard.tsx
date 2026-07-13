@@ -1,291 +1,166 @@
 "use client";
-
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import {
-  BookOpen,
-  Trophy,
-  Target,
-  ArrowRight,
-  Clock,
-  Play,
-  CheckCircle2,
-  Loader2,
-  FileText,
-  FileQuestion,
-} from "lucide-react";
 import Link from "next/link";
-import { stripHtml } from "@/lib/html-utils";
-import { motion } from "motion/react";
+import { useFormatter, useTranslations } from "next-intl";
+import { api } from "@/lib/api";
+import type { LearningProgress, StudentStats } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardLoadError } from "./dashboard-load-error";
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, Trophy } from "lucide-react";
 
-function formatTimeAgo(dateString: string) {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) return "Baru saja";
-  
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes} menit yang lalu`;
-  
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours} jam yang lalu`;
-  
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays === 1) return "Kemarin";
-  if (diffInDays < 7) return `${diffInDays} hari yang lalu`;
-  
-  return date.toLocaleDateString("id-ID");
-}
-
-const levelColors: Record<string, string> = {
-  beginner: "bg-green-500/10 text-green-600 border-green-500/20",
-  intermediate: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  advanced: "bg-red-500/10 text-red-600 border-red-500/20",
+const emptyStats: StudentStats = {
+  startedCourses: 0,
+  completedCourses: 0,
+  certificates: 0,
+  upcomingDeadlines: [],
+  recentActivities: [],
 };
-
-const levelLabels: Record<string, string> = {
-  beginner: "Pemula",
-  intermediate: "Menengah",
-  advanced: "Lanjutan",
-};
-
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
-
 export function StudentDashboard() {
+  const t = useTranslations("studentOverview");
+  const format = useFormatter();
+  const [stats, setStats] = useState(emptyStats);
+  const [progress, setProgress] = useState<LearningProgress[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>({
-    enrolledCourses: 0,
-    completedCourses: 0,
-    certificates: 0,
-    upcomingDeadlines: [],
-    recentActivities: [],
-  });
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-
+  const [error, setError] = useState("");
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsData, enrollmentsData] = await Promise.all([
-          api.get("/dashboard/student"),
-          api.get("/enrollments")
-        ]);
-        setStats(statsData || {
-          enrolledCourses: 0,
-          completedCourses: 0,
-          certificates: 0,
-          upcomingDeadlines: [],
-          recentActivities: [],
-        });
-        setEnrollments(enrollmentsData || []);
-      } catch (error) {
-        console.error("Failed to fetch student dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+    Promise.all([
+      api.get<StudentStats>("/dashboard/student"),
+      api.get<LearningProgress[]>("/learning/progress"),
+    ])
+      .then(([s, p]) => {
+        setStats(s);
+        setProgress(p);
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : t("loadError"));
+      })
+      .finally(() => setLoading(false));
+  }, [t]);
+  if (loading) return <Skeleton className="h-96 w-full" />;
+  if (error) return <DashboardLoadError message={error} />;
 
-  const statCards = [
-    { title: "Kursus Aktif", value: stats.enrolledCourses.toString(), icon: BookOpen, bgColor: "bg-indigo-500/10", iconColor: "text-indigo-500" },
-    { title: "Kursus Selesai", value: stats.completedCourses.toString(), icon: CheckCircle2, bgColor: "bg-emerald-500/10", iconColor: "text-emerald-500" },
-    { title: "Sertifikat", value: stats.certificates.toString(), icon: Trophy, bgColor: "bg-amber-500/10", iconColor: "text-amber-500" },
-    { title: "Skor Rata-rata", value: "82", icon: Target, bgColor: "bg-violet-500/10", iconColor: "text-violet-500" },
+  const statItems = [
+    {
+      label: t("startedCourses"),
+      value: stats.startedCourses,
+      icon: BookOpen,
+      color: "bg-[#e7edff] text-[#10233f]",
+      mutedColor: "text-[#52627a]",
+    },
+    {
+      label: t("completed"),
+      value: stats.completedCourses,
+      icon: CheckCircle2,
+      color: "bg-[#e1f5e9] text-[#173f35]",
+      mutedColor: "text-[#527067]",
+    },
+    {
+      label: t("certificates"),
+      value: stats.certificates,
+      icon: Trophy,
+      color: "bg-[#fff2b8] text-[#3e3510]",
+      mutedColor: "text-[#776a31]",
+    },
   ];
 
-  const activeEnrollments = enrollments.filter((e) => e.status === "active").slice(0, 4);
-  const upcomingDeadlines = stats.upcomingDeadlines || [];
-  const recentActivities = stats.recentActivities || [];
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
-      <motion.div variants={item}>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard Siswa</h1>
-        <p className="text-muted-foreground">Lanjutkan perjalanan belajar Anda</p>
-      </motion.div>
-
-      {/* Stats */}
-      <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={container} initial="hidden" animate="show">
-        {statCards.map((stat) => (
-          <motion.div key={stat.title} variants={item}>
-            <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.bgColor} rounded-xl p-3`}>
-                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                  </div>
+    <div className="space-y-7">
+      <div>
+        <p className="text-sm font-bold uppercase tracking-[.16em] text-primary">{t("eyebrow")}</p>
+        <h1 className="mt-1 text-3xl font-extrabold">{t("title")}</h1>
+        <p className="mt-2 text-muted-foreground">{t("description")}</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {statItems.map(({ label, value, icon: ItemIcon, color, mutedColor }) => {
+          return (
+            <Card key={label} className={`border-2 ${color}`}>
+              <CardContent className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-semibold ${mutedColor}`}>{label}</p>
+                  <p className="mt-1 text-3xl font-extrabold">{value}</p>
                 </div>
+                <ItemIcon className="size-8" />
               </CardContent>
             </Card>
-          </motion.div>
-        ))}
-      </motion.div>
-
-      {/* Active Courses */}
-      <motion.div variants={item}>
-        <Card className="border-0 shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Kursus Aktif</CardTitle>
-              <CardDescription>Lanjutkan belajar dari terakhir Anda berhenti</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" className="gap-1" asChild>
-              <Link href="/dashboard/student/courses">
-                Lihat Semua <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {activeEnrollments.length === 0 ? (
-                <div className="col-span-2 text-center py-8 text-muted-foreground">
-                  Belum ada kursus aktif. Mulai jelajahi kursus!
-                </div>
-              ) : (
-                activeEnrollments.map((enrollment, idx) => {
-                  const course = enrollment.course;
-                  if (!course) return null;
-                  return (
-                    <motion.div
-                      key={enrollment.id}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 + idx * 0.1, duration: 0.4 }}
-                      className="group relative rounded-xl border border-border bg-card p-4 hover:shadow-md transition-all duration-200 hover:border-primary/30"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="h-14 w-14 rounded-xl gradient-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
-                          <BookOpen className="h-7 w-7 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm truncate">{course.title}</h3>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            oleh {course.teacher?.name || "Pengajar"}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="outline" className={`text-[10px] ${levelColors[course.level]}`}>
-                              {levelLabels[course.level]}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Progress</span>
-                          <span className="font-medium">{enrollment.progress}%</span>
-                        </div>
-                        <Progress value={enrollment.progress} className="h-2" />
-                      </div>
-
-                      <Button size="sm" className="w-full mt-4 gap-2" asChild>
-                        <Link href={`/dashboard/student/courses/${course.id}`}>
-                          <Play className="h-4 w-4" /> Lanjutkan Belajar
-                        </Link>
-                      </Button>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      <motion.div className="grid gap-6 md:grid-cols-2" variants={container} initial="hidden" animate="show">
-        {/* Upcoming Deadlines */}
-        <motion.div variants={item}>
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Tenggat Waktu Mendatang</CardTitle>
-              <CardDescription>Tugas yang harus segera dikumpulkan</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {upcomingDeadlines.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
-                  Tidak ada tenggat waktu dalam waktu dekat.
-                </div>
-              ) : upcomingDeadlines.map((assignment: any) => (
-                <div key={assignment.id} className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors">
-                  <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                    <Clock className="h-5 w-5 text-amber-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{assignment.title}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{stripHtml(assignment.description)}</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs shrink-0">
-                    {new Date(assignment.deadline).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Recent Activity */}
-        <motion.div variants={item}>
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Aktivitas Terakhir</CardTitle>
-              <CardDescription>Aktivitas belajar terbaru Anda</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {recentActivities.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
-                  Belum ada aktivitas.
-                </div>
-              ) : recentActivities.map((activity: any) => (
-                <div key={activity.id} className="flex gap-4">
-                  <div className="mt-1">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                      activity.type === 'assignment' ? 'bg-blue-500/10' : 'bg-emerald-500/10'
-                    }`}>
-                      {activity.type === 'assignment' ? (
-                        <FileText className="h-4 w-4 text-blue-500" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                      )}
+          );
+        })}
+      </div>
+      <section>
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <h2 className="text-xl font-extrabold">{t("continueLearning")}</h2>
+            <p className="text-sm text-muted-foreground">{t("recentProgress")}</p>
+          </div>
+          <Button variant="ghost" asChild>
+            <Link href="/dashboard/student/courses">
+              {t("viewAll")}
+              <ArrowRight />
+            </Link>
+          </Button>
+        </div>
+        {progress.length ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {progress.slice(0, 4).map((item) => (
+              <Card key={item.id} className="border-2">
+                <CardContent>
+                  <div className="flex gap-4">
+                    <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-secondary">
+                      <BookOpen />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-bold">{item.course?.title || t("course")}</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("lastOpened", {
+                          date: format.dateTime(new Date(item.lastAccessedAt), {
+                            dateStyle: "medium",
+                          }),
+                        })}
+                      </p>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{activity.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatTimeAgo(activity.createdAt)}</p>
+                  <div className="mt-5 flex justify-between text-xs">
+                    <span>{t("progress")}</span>
+                    <b>{item.progress}%</b>
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </motion.div>
-    </motion.div>
+                  <Progress value={item.progress} className="mt-2" />
+                  <Button className="mt-4 w-full" asChild>
+                    <Link href={`/dashboard/student/courses/${item.courseId}`}>
+                      {t("continue")}
+                      <ArrowRight />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Empty className="border-2">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Clock3 />
+              </EmptyMedia>
+              <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
+              <EmptyDescription>{t("emptyDescription")}</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button asChild>
+                <Link href="/dashboard/student/browse">{t("findCourse")}</Link>
+              </Button>
+            </EmptyContent>
+          </Empty>
+        )}
+      </section>
+    </div>
   );
 }

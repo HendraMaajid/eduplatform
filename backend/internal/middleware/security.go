@@ -23,6 +23,8 @@ func SecurityHeaders() gin.HandlerFunc {
 
 		// Restrict browser features
 		c.Writer.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		c.Writer.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+		c.Writer.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
 
 		// HSTS in production
 		if os.Getenv("GIN_MODE") == "release" {

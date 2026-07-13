@@ -1,4 +1,8 @@
+"use client";
+
 import DOMPurify from "dompurify";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 /**
  * Sanitize HTML using DOMPurify to prevent XSS attacks.
@@ -6,18 +10,44 @@ import DOMPurify from "dompurify";
  */
 function sanitizeHtml(html: string): string {
   if (!html) return "";
-  if (typeof window === "undefined") {
-    // SSR fallback: strip all HTML tags
-    return html.replace(/<[^>]*>/g, "").trim();
-  }
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
-      "p", "b", "i", "em", "strong", "a", "ul", "ol", "li",
-      "h1", "h2", "h3", "h4", "h5", "h6", "br", "code", "pre",
-      "blockquote", "img", "table", "thead", "tbody", "tr", "th", "td",
-      "span", "div", "hr", "sup", "sub", "mark",
+      "p",
+      "b",
+      "i",
+      "em",
+      "strong",
+      "a",
+      "ul",
+      "ol",
+      "li",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "br",
+      "code",
+      "pre",
+      "blockquote",
+      "img",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+      "span",
+      "div",
+      "hr",
+      "sup",
+      "sub",
+      "mark",
     ],
-    ALLOWED_ATTR: ["href", "src", "alt", "class", "target", "rel", "width", "height"],
+    // Author-provided links stay in the current tab. This prevents a missing
+    // rel="noopener" on target="_blank" from exposing window.opener.
+    ALLOWED_ATTR: ["href", "src", "alt", "class", "rel", "width", "height"],
     ALLOW_DATA_ATTR: false,
   });
 }
@@ -45,11 +75,30 @@ export function stripHtml(html: string): string {
  */
 export function RichContent({ html, className = "" }: { html: string; className?: string }) {
   if (!html) return null;
-  const cleanHtml = sanitizeHtml(html);
-  return (
-    <div
-      className={`prose prose-sm dark:prose-invert max-w-none ${className}`}
-      dangerouslySetInnerHTML={{ __html: cleanHtml }}
-    />
-  );
+
+  return <HydratedRichContent html={html} className={className} />;
+}
+
+function HydratedRichContent({ html, className }: { html: string; className: string }) {
+  const [sanitized, setSanitized] = useState<{ source: string; value: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setSanitized({ source: html, value: sanitizeHtml(html) });
+    });
+    return () => {
+      active = false;
+    };
+  }, [html]);
+
+  const classes = cn("rich-content max-w-none", className);
+  if (sanitized?.source !== html) {
+    // Render text as a React child during SSR and the first client pass. React
+    // escapes it automatically, so untrusted markup cannot execute before
+    // DOMPurify is available in the browser.
+    return <div className={classes}>{html.replace(/<[^>]*>/g, "").trim()}</div>;
+  }
+
+  return <div className={classes} dangerouslySetInnerHTML={{ __html: sanitized.value }} />;
 }

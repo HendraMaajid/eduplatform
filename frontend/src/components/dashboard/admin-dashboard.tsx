@@ -1,294 +1,253 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ArrowRight, BookOpen, CheckCircle2, TrendingUp, Users } from "lucide-react";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { AdminStats, LearningProgress } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/lib/mock-data";
-import {
-  BookOpen,
-  Users,
-  GraduationCap,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Loader2,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { motion } from "motion/react";
-
-const CATEGORY_COLORS: Record<string, string> = {
-  mobile: "oklch(0.488 0.243 264.376)",
-  web: "oklch(0.541 0.281 293.009)",
-  design: "oklch(0.702 0.183 293)",
-  data: "oklch(0.795 0.124 286)",
-  devops: "oklch(0.606 0.25 292)",
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  mobile: "Mobile Dev",
-  web: "Web Dev",
-  design: "Design",
-  data: "Data Science",
-  devops: "DevOps",
-};
-
-const container = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-};
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardLoadError } from "./dashboard-load-error";
 
 export function AdminDashboard() {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>({
-    totalStudents: 0,
-    totalTeachers: 0,
-    totalCourses: 0,
-    totalRevenue: 0,
-  });
-  const [courses, setCourses] = useState<any[]>([]);
-  const [recentEnrollments, setRecentEnrollments] = useState<any[]>([]);
+  const t = useTranslations("adminOverview");
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [recent, setRecent] = useState<LearningProgress[]>([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [dashData, coursesRes, enrollmentsData] = await Promise.all([
-          api.get("/dashboard/admin"),
-          api.get("/courses?limit=100"),
-          api.get("/enrollments/recent").catch(() => []),
-        ]);
-        setStats(dashData || { totalStudents: 0, totalTeachers: 0, totalCourses: 0, totalRevenue: 0 });
-        setCourses(coursesRes?.data || (Array.isArray(coursesRes) ? coursesRes : []));
-        setRecentEnrollments(enrollmentsData || []);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAll();
-  }, []);
+    Promise.all([
+      api.get<AdminStats>("/dashboard/admin"),
+      api.get<LearningProgress[]>("/learning/recent"),
+    ])
+      .then(([dashboardStats, recentProgress]) => {
+        setStats(dashboardStats);
+        setRecent(recentProgress);
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : t("loadError"));
+      });
+  }, [t]);
 
-  const categoryMap = new Map<string, number>();
-  courses.forEach((c) => {
-    const cat = c.category || "other";
-    categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
-  });
-  const categoryData = Array.from(categoryMap.entries()).map(([name, value]) => ({
-    name: CATEGORY_LABELS[name] || name,
-    value,
-    color: CATEGORY_COLORS[name] || "oklch(0.5 0.2 270)",
+  if (error) return <DashboardLoadError message={error} />;
+  if (!stats) return <Skeleton className="h-[70vh]" />;
+
+  const completionRate = stats.activeLearners
+    ? Math.min(100, Math.round((stats.completedLearnings / stats.activeLearners) * 100))
+    : 0;
+  const items = [
+    {
+      label: t("totalStudents"),
+      value: stats.totalStudents,
+      icon: Users,
+      detail: t("registeredStudents"),
+    },
+    {
+      label: t("activeCourses"),
+      value: stats.totalCourses,
+      icon: BookOpen,
+      detail: t("allPlatformCourses"),
+    },
+    {
+      label: t("activeThirtyDays"),
+      value: stats.activeLearners,
+      icon: TrendingUp,
+      detail: t("returningStudents"),
+    },
+    {
+      label: t("completedCourses"),
+      value: stats.completedLearnings,
+      icon: CheckCircle2,
+      detail: t("certificatesIssued", { count: stats.certificatesIssued }),
+    },
+  ];
+  const breakdown = (stats.progressBreakdown ?? []).map((item) => ({
+    ...item,
+    label: t(`statuses.${item.status}`),
   }));
-
-  const monthlyRevenue = [
-    { name: "Jan", value: Math.round(stats.totalRevenue * 0.12) },
-    { name: "Feb", value: Math.round(stats.totalRevenue * 0.15) },
-    { name: "Mar", value: Math.round(stats.totalRevenue * 0.18) },
-    { name: "Apr", value: Math.round(stats.totalRevenue * 0.16) },
-    { name: "May", value: Math.round(stats.totalRevenue * 0.19) },
-    { name: "Jun", value: Math.round(stats.totalRevenue * 0.20) },
-  ];
-
-  const topCourses = [...courses]
-    .sort((a, b) => (b.enrolledStudents || 0) - (a.enrolledStudents || 0))
-    .slice(0, 5);
-
-  const statCards = [
-    { title: "Total Kursus", value: stats.totalCourses.toString(), icon: BookOpen, color: "from-indigo-500 to-indigo-600", bgColor: "bg-indigo-500/10", iconColor: "text-indigo-500" },
-    { title: "Total Siswa", value: stats.totalStudents.toString(), icon: Users, color: "from-violet-500 to-violet-600", bgColor: "bg-violet-500/10", iconColor: "text-violet-500" },
-    { title: "Total Pengajar", value: stats.totalTeachers.toString(), icon: GraduationCap, color: "from-purple-500 to-purple-600", bgColor: "bg-purple-500/10", iconColor: "text-purple-500" },
-    { title: "Total Pendapatan", value: formatCurrency(stats.totalRevenue), icon: DollarSign, color: "from-emerald-500 to-emerald-600", bgColor: "bg-emerald-500/10", iconColor: "text-emerald-500" },
-  ];
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const activityConfig = {
+    activeLearners: { label: t("activeStudents"), color: "var(--chart-1)" },
+    completedModules: { label: t("completedModules"), color: "var(--chart-2)" },
+  } satisfies ChartConfig;
+  const breakdownConfig = {
+    total: { label: t("totalProgress"), color: "var(--chart-1)" },
+  } satisfies ChartConfig;
 
   return (
-    <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
-      <motion.div variants={item}>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard Admin</h1>
-        <p className="text-muted-foreground">Ringkasan performa platform pembelajaran Anda</p>
-      </motion.div>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">{t("title")}</h1>
+          <p className="mt-2 text-muted-foreground">{t("description")}</p>
+        </div>
+        <Badge variant="outline" className="w-fit">
+          {t("lastTwelveWeeks")}
+        </Badge>
+      </div>
 
-      {/* Stats Cards */}
-      <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" variants={container} initial="hidden" animate="show">
-        {statCards.map((stat) => (
-          <motion.div key={stat.title} variants={item}>
-            <Card className="relative overflow-hidden border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.bgColor} rounded-xl p-3`}>
-                    <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
-                  </div>
-                </div>
-                <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.color}`} />
-              </CardContent>
-            </Card>
-          </motion.div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {items.map(({ label, value, icon: Icon, detail }) => (
+          <Card key={label}>
+            <CardHeader className="flex-row items-start justify-between gap-3">
+              <div>
+                <CardDescription>{label}</CardDescription>
+                <CardTitle className="mt-1 text-3xl tabular-nums">{value}</CardTitle>
+              </div>
+              <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Icon />
+              </span>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">{detail}</p>
+            </CardContent>
+          </Card>
         ))}
-      </motion.div>
+      </div>
 
-      {/* Charts Row */}
-      <motion.div className="grid gap-6 lg:grid-cols-7" variants={container} initial="hidden" animate="show">
-        <motion.div variants={item} className="lg:col-span-4">
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Pendapatan Bulanan</CardTitle>
-              <CardDescription>Tren pendapatan 6 bulan terakhir</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={monthlyRevenue}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="oklch(0.488 0.243 264.376)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="oklch(0.488 0.243 264.376)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="name" className="text-xs" />
-                  <YAxis className="text-xs" tickFormatter={(v) => `${v / 1000000}jt`} />
-                  <Tooltip
-                    formatter={(value) => [formatCurrency(Number(value)), "Pendapatan"]}
-                    contentStyle={{ borderRadius: "8px", border: "1px solid oklch(0.91 0.015 280)" }}
-                  />
-                  <Area type="monotone" dataKey="value" stroke="oklch(0.488 0.243 264.376)" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </motion.div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,.8fr)]">
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>{t("learningActivity")}</CardTitle>
+                <CardDescription>{t("learningActivityDescription")}</CardDescription>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-chart-1" /> {t("activeStudents")}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-chart-2" /> {t("completedModules")}
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={activityConfig} className="h-80 min-h-80">
+              <AreaChart accessibilityLayer data={stats.weeklyActivity ?? []}>
+                <defs>
+                  <linearGradient id="active-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-activeLearners)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--color-activeLearners)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="completed-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="5%"
+                      stopColor="var(--color-completedModules)"
+                      stopOpacity={0.24}
+                    />
+                    <stop offset="95%" stopColor="var(--color-completedModules)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="week" tickLine={false} axisLine={false} tickMargin={10} />
+                <YAxis tickLine={false} axisLine={false} width={36} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Area
+                  type="monotone"
+                  dataKey="activeLearners"
+                  stroke="var(--color-activeLearners)"
+                  fill="url(#active-fill)"
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="completedModules"
+                  stroke="var(--color-completedModules)"
+                  fill="url(#completed-fill)"
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
 
-        <motion.div variants={item} className="lg:col-span-3">
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Kursus per Kategori</CardTitle>
-              <CardDescription>Distribusi kursus berdasarkan kategori</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {categoryData.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" strokeWidth={2}>
-                        {categoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {categoryData.map((cat) => (
-                      <div key={cat.name} className="flex items-center gap-2 text-sm">
-                        <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                        <span className="text-muted-foreground truncate">{cat.name}</span>
-                        <span className="ml-auto font-medium">{cat.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">Belum ada data kursus</p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </motion.div>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("learningStatus")}</CardTitle>
+            <CardDescription>{t("learningStatusDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <ChartContainer config={breakdownConfig} className="h-56 min-h-56">
+              <BarChart accessibilityLayer data={breakdown} layout="vertical" margin={{ left: 4 }}>
+                <CartesianGrid horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis
+                  dataKey="label"
+                  type="category"
+                  tickLine={false}
+                  axisLine={false}
+                  width={104}
+                />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar
+                  dataKey="total"
+                  fill="var(--color-total)"
+                  radius={5}
+                  isAnimationActive={false}
+                />
+              </BarChart>
+            </ChartContainer>
+            <div>
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{t("completionRatio")}</span>
+                <b>{completionRate}%</b>
+              </div>
+              <Progress value={completionRate} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Recent Enrollments & Top Courses */}
-      <motion.div className="grid gap-6 lg:grid-cols-2" variants={container} initial="hidden" animate="show">
-        <motion.div variants={item}>
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Pendaftaran Terbaru</CardTitle>
-              <CardDescription>Siswa yang baru mendaftar kursus</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {recentEnrollments.length > 0 ? (
-                recentEnrollments.slice(0, 5).map((enrollment: any) => (
-                  <div key={enrollment.id} className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={enrollment.student?.avatar} alt={enrollment.student?.name} />
-                      <AvatarFallback className="gradient-primary text-white text-xs">
-                        {enrollment.student?.name?.slice(0, 2).toUpperCase() || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{enrollment.student?.name || "Siswa"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{enrollment.course?.title || "Kursus"}</p>
-                    </div>
-                    <Badge variant="secondary" className="text-xs shrink-0 bg-emerald-500/10 text-emerald-600">
-                      {new Date(enrollment.enrolledAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
-                    </Badge>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Belum ada pendaftaran</p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div variants={item}>
-          <Card className="border-0 shadow-md h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">Kursus Terdaftar</CardTitle>
-              <CardDescription>Daftar kursus yang tersedia di platform</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {topCourses.length > 0 ? (
-                topCourses.map((course, i) => (
-                  <div key={course.id} className="flex items-center gap-4">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-sm">
-                      #{i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{course.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-[10px]">{course.category || "Umum"}</Badge>
-                        <span className="text-xs text-muted-foreground">{course.teacher?.name || "—"}</span>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className={`text-xs shrink-0 ${course.status === "published" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-                      {course.status === "published" ? "Aktif" : "Draft"}
-                    </Badge>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Belum ada kursus</p>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </motion.div>
-    </motion.div>
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>{t("needsAttention")}</CardTitle>
+            <CardDescription>{t("needsAttentionDescription")}</CardDescription>
+          </div>
+          <Button variant="ghost" asChild>
+            <Link href="/dashboard/admin/progress">
+              {t("viewAll")}
+              <ArrowRight data-icon="inline-end" />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y">
+            {recent
+              .filter((item) => item.progress < 50)
+              .slice(0, 6)
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className="grid gap-2 py-3 text-sm sm:grid-cols-[1fr_1fr_160px] sm:items-center"
+                >
+                  <span className="font-semibold">{item.student?.name || t("student")}</span>
+                  <span className="truncate text-muted-foreground">
+                    {item.course?.title || t("course")}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <Progress value={item.progress} className="flex-1" />
+                    <b className="w-10 text-right tabular-nums">{item.progress}%</b>
+                  </span>
+                </div>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
