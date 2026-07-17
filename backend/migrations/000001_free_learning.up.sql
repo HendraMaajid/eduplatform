@@ -61,7 +61,79 @@ CREATE TABLE IF NOT EXISTS platform_settings (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-INSERT INTO platform_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+-- AutoMigrate can create the current platform_settings shape before this
+-- versioned migration is applied. In that shape, description and
+-- description_en are NOT NULL without database defaults, so inserting only
+-- the singleton ID fails. Keep this migration compatible with both the
+-- legacy shape (without description_en) and the current bootstrap shape.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'platform_settings'
+      AND column_name = 'description_en'
+  ) THEN
+    INSERT INTO platform_settings (
+      id,
+      name,
+      description,
+      description_en,
+      support_email,
+      logo_url,
+      default_locale,
+      certificate_issuer,
+      notify_new_registration,
+      notify_new_submission,
+      notify_grade_published,
+      created_at,
+      updated_at
+    ) VALUES (
+      1,
+      'EduCourse',
+      'Platform belajar teknologi gratis dengan materi terarah, latihan praktik, kuis, proyek, dan sertifikat.',
+      'A free technology learning platform with structured lessons, hands-on practice, quizzes, projects, and certificates.',
+      'hendralatiefulm@gmail.com',
+      '',
+      'id',
+      'EduCourse',
+      true,
+      true,
+      true,
+      now(),
+      now()
+    ) ON CONFLICT (id) DO NOTHING;
+  ELSE
+    INSERT INTO platform_settings (
+      id,
+      name,
+      description,
+      support_email,
+      logo_url,
+      default_locale,
+      certificate_issuer,
+      notify_new_registration,
+      notify_new_submission,
+      notify_grade_published,
+      created_at,
+      updated_at
+    ) VALUES (
+      1,
+      'EduCourse',
+      'Platform belajar teknologi gratis dengan materi terarah, latihan praktik, kuis, proyek, dan sertifikat.',
+      'hendralatiefulm@gmail.com',
+      '',
+      'id',
+      'EduCourse',
+      true,
+      true,
+      true,
+      now(),
+      now()
+    ) ON CONFLICT (id) DO NOTHING;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS user_preferences (
   user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
