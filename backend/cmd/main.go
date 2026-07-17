@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
+	"time"
 
 	"backend/internal/handler"
 	"backend/internal/middleware"
@@ -39,17 +40,26 @@ func main() {
 	isProduction := gin.Mode() == gin.ReleaseMode || os.Getenv("APP_ENV") == "production"
 	shouldSeed := os.Getenv("SKIP_SEED") == "false" && (!isProduction || os.Getenv("FORCE_SEED") == "true")
 	if shouldSeed {
-		seed.SeedAll()
-		seed.SeedAdminIfMissing()
-	}
-
-	if countStr := os.Getenv("SEED_TEST_STUDENTS"); countStr != "" {
-		count, err := strconv.Atoi(countStr)
+		config, err := seed.ConfigFromEnv()
 		if err != nil {
-			log.Printf("Invalid SEED_TEST_STUDENTS value: %s", countStr)
-		} else if err := seed.SeedTestStudents(count); err != nil {
-			log.Printf("Failed to seed test students: %v", err)
+			log.Fatalf("Invalid seed configuration: %v", err)
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		result, err := seed.Run(ctx, database.DB, config)
+		cancel()
+		if err != nil {
+			log.Fatalf("Failed to seed default dataset: %v", err)
+		}
+		log.Printf(
+			"Seed complete: platform=%q admin=%s course=%q modules=%d quizzes=%d questions=%d assignments=%d",
+			result.PlatformName,
+			result.SuperAdmin,
+			result.CourseTitle,
+			result.Modules,
+			result.Quizzes,
+			result.Questions,
+			result.Assignments,
+		)
 	}
 
 	// Initialize Gin router

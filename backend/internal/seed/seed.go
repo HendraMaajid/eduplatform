@@ -1,166 +1,72 @@
-// Package seed provides comprehensive database seeding for the EduCourse platform.
-//
-// Demo accounts (all password "password123" unless SEED_PASSWORD set):
-//
-//	admin@eduplatform.com              - super_admin
-//	admin@admin.com                    - admin
-//	budi@teacher.com                   - teacher
-//	teacher01@educourse.com … teacher11@educourse.com - teacher
-//	student@example.com                - student
-//	student01@educourse.com … student54@educourse.com - student
+// Package seed creates the minimal default dataset required by EduCourse:
+// platform settings, one super administrator, and one complete Java course.
 package seed
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"log"
-	mrand "math/rand"
-	"os"
-	"time"
 
-	"backend/internal/model"
-	"backend/pkg/database"
+	"backend/internal/service"
 
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm/clause"
+	"gorm.io/gorm"
 )
 
-// ─── Config & Context ─────────────────────────────────────────────────────────
-
-type seedConfig struct {
-	TeacherCount int
-	StudentCount int
-	CourseCount  int
-	PasswordHash string
-	RNG          *mrand.Rand
+// Result summarizes the records synchronized by Run.
+type Result struct {
+	PlatformName string
+	SuperAdmin   string
+	CourseID     string
+	CourseTitle  string
+	Modules      int
+	Quizzes      int
+	Questions    int
+	Assignments  int
 }
 
-type seededUsers struct {
-	SuperAdmin model.User
-	Admin      model.User
-	Teachers   []model.User
-	Students   []model.User
-}
-
-type seededCourses struct {
-	Courses         []model.Course
-	Modules         []model.Module
-	ModulesByCourse map[uuid.UUID][]model.Module
-}
-
-type seededLearning struct {
-	Quizzes             []model.Quiz
-	Questions           []model.Question
-	Assignments         []model.Assignment
-	QuizzesByCourse     map[uuid.UUID][]model.Quiz
-	QuestionsByQuiz     map[uuid.UUID][]model.Question
-	AssignmentsByCourse map[uuid.UUID][]model.Assignment
-}
-
-type seededProgress struct {
-	Progresses   []model.LearningProgress
-	Certificates []model.Certificate
-	CountByState map[string]int
-}
-
-type seedContext struct {
-	Cfg      seedConfig
-	Users    *seededUsers
-	Courses  *seededCourses
-	Learning *seededLearning
-	Progress *seededProgress
-}
-
-// ─── Main Orchestrator ────────────────────────────────────────────────────────
-
-func SeedAll() {
-	if os.Getenv("GIN_MODE") == "release" && os.Getenv("FORCE_SEED") != "true" {
-		log.Println("Skipping seed in production mode (set FORCE_SEED=true to override)")
-		return
+// Run synchronizes the minimal default dataset in one transaction. Re-running
+// it updates the configured super admin and Java curriculum without touching
+// unrelated users or courses.
+func Run(ctx context.Context, db *gorm.DB, config Config) (Result, error) {
+	if db == nil {
+		return Result{}, errors.New("seed database is required")
+	}
+	if err := config.validate(); err != nil {
+		return Result{}, err
 	}
 
-	start := time.Now()
-	log.Println("[seed] Running database seeder (duplicates will be skipped)...")
-
-	seedPassword := os.Getenv("SEED_PASSWORD")
-	if seedPassword == "" {
-		seedPassword = "password123"
-	}
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(seedPassword), bcrypt.DefaultCost)
-
-	ctx := &seedContext{
-		Cfg: seedConfig{
-			TeacherCount: 12,
-			StudentCount: 55,
-			CourseCount:  15,
-			PasswordHash: string(hashedPassword),
-			RNG:          newSeededRand(),
-		},
-	}
-
-	steps := []struct {
-		name string
-		fn   func(*seedContext) error
-	}{
-		{"users", seedUsers},
-		{"courses", seedCourses},
-		{"learning", seedLearning},
-		{"learning_progress", seedProgress},
-		{"ratings", seedRatings},
-		{"notifications", seedNotifications},
-	}
-
-	for _, step := range steps {
-		if err := step.fn(ctx); err != nil {
-			log.Fatalf("[seed] FAILED at %s: %v", step.name, err)
+	result := Result{}
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		settings, err := seedPlatformSettings(tx)
+		if err != nil {
+			return err
 		}
-	}
-
-	log.Printf("[seed] completed in %s", time.Since(start).Round(time.Millisecond))
-}
-
-// ─── Preserved Functions ──────────────────────────────────────────────────────
-
-func SeedAdminIfMissing() {
-	var admin model.User
-	if err := database.DB.Where("role = ? AND email = ?", "admin", "admin@admin.com").First(&admin).Error; err != nil {
-		log.Println("Admin user not found, creating...")
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-		admin = model.User{
-			Name:         "Admin EduPlatform",
-			Email:        "admin@admin.com",
-			PasswordHash: string(hashedPassword),
-			Role:         "admin",
+		admin, err := seedSuperAdmin(tx, config)
+		if err != nil {
+			return err
 		}
-		database.DB.Create(&admin)
-		log.Println("Admin user created successfully!")
-	}
-}
+		courseResult, err := seedJavaCourse(tx, admin)
+		if err != nil {
+			return err
+		}
 
-func SeedTestStudents(count int) error {
-	if count <= 0 {
+		result = Result{
+			PlatformName: settings.Name,
+			SuperAdmin:   admin.Email,
+			CourseID:     courseResult.CourseID.String(),
+			CourseTitle:  courseResult.Title,
+			Modules:      courseResult.Modules,
+			Quizzes:      courseResult.Quizzes,
+			Questions:    courseResult.Questions,
+			Assignments:  courseResult.Assignments,
+		}
 		return nil
-	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	})
 	if err != nil {
-		return err
+		return Result{}, fmt.Errorf("seed default dataset: %w", err)
 	}
-	students := make([]model.User, 0, count)
-	for i := 1; i <= count; i++ {
-		students = append(students, model.User{
-			Name:         fmt.Sprintf("Load Test Student %04d", i),
-			Email:        fmt.Sprintf("loadtest_student_%04d@example.com", i),
-			PasswordHash: string(hashedPassword),
-			Role:         "student",
-		})
-	}
-	result := database.DB.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "email"}},
-		DoNothing: true,
-	}).CreateInBatches(students, 200)
-	if result.Error != nil {
-		return result.Error
-	}
-	log.Printf("Seeded %d load test students (duplicates ignored)", count)
-	return nil
+	service.AppCache.InvalidatePrefix("courses:")
+	service.AppCache.InvalidatePrefix("dashboard:")
+	service.AppCache.InvalidatePrefix("learning:")
+	return result, nil
 }

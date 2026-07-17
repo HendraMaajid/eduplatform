@@ -280,13 +280,18 @@ FRONTEND_URL=http://localhost:3000
 > postgresql://postgres:PASSWORD@localhost:5432/educourse_dev?sslmode=disable
 > ```
 
-Setelah diganti, jalankan backend seperti biasa:
+Setelah diganti, jalankan migrasi, seeder default, lalu backend:
 ```bash
 cd backend
-go run cmd/main.go
+go run ./cmd/migrate up
+SEED_SUPER_ADMIN_PASSWORD='password-lokal-yang-kuat' go run ./cmd/seed
+go run ./cmd
 ```
 
-Backend akan otomatis membuat semua tabel dan menjalankan seeder di database lokal.
+Seeder bersifat idempotent dan hanya menyiapkan pengaturan platform, akun super
+admin `hendralatiefulm@gmail.com`, serta course Java Dasar yang lengkap. Seeder
+tidak menghapus user atau course lain. Jika course Java sudah memiliki progress,
+nilai, rating, atau submission, seeder berhenti agar data belajar tidak hilang.
 
 #### Cara Switch antara Lokal dan Supabase
 
@@ -302,7 +307,7 @@ DATABASE_URL=postgresql://postgres@localhost:5432/educourse_dev?sslmode=disable
 DATABASE_URL=postgresql://postgres:[PASS]@db.[REF].supabase.co:5432/postgres
 ```
 
-> 📌 **Catatan:** Data di database lokal dan Supabase terpisah. Saat pertama kali switch, backend akan auto-migrate dan seed ulang data dummy.
+> 📌 **Catatan:** Data di database lokal dan Supabase terpisah. Jalankan migrasi dan seeder secara eksplisit pada database yang memang ingin diisi.
 
 ---
 
@@ -323,6 +328,8 @@ DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabas
 PORT=8080
 JWT_SECRET=ganti-dengan-secret-key-yang-aman
 FRONTEND_URL=http://localhost:3000
+SEED_SUPER_ADMIN_NAME=Hendra Latief Ulum
+SEED_SUPER_ADMIN_PASSWORD=ganti-dengan-password-lokal-yang-kuat
 ```
 
 | Variable | Keterangan |
@@ -331,20 +338,23 @@ FRONTEND_URL=http://localhost:3000
 | `PORT` | Port untuk backend server (default: 8080) |
 | `JWT_SECRET` | Secret key untuk JWT token (ganti dengan string random yang panjang) |
 | `FRONTEND_URL` | URL frontend untuk CORS (default: http://localhost:3000) |
+| `SEED_SUPER_ADMIN_PASSWORD` | Password 8–72 karakter untuk super admin yang dibuat seeder |
 
 ```bash
 # Download dependencies
 go mod download
 
+# Terapkan migrasi dan isi data awal satu kali
+go run ./cmd/migrate up
+go run ./cmd/seed
+
 # Jalankan backend
-go run cmd/main.go
+go run ./cmd
 ```
 
 > ✅ Jika berhasil, akan muncul: `Server starting on port 8080`
 >
-> Backend akan otomatis:
-> - Membuat tabel-tabel di database (auto-migrate)
-> - Menjalankan seeder untuk data dummy
+> Migrasi dan seeder dipisahkan dari startup agar perubahan data selalu disengaja.
 
 ### 3. Setup Frontend (Next.js)
 
@@ -413,7 +423,7 @@ Untuk menjalankan full project, Anda perlu **2 terminal**:
 ### Terminal 1 — Backend
 ```bash
 cd backend
-go run cmd/main.go
+go run ./cmd
 ```
 Backend berjalan di: `http://localhost:8080`
 

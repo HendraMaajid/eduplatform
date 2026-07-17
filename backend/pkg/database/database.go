@@ -91,10 +91,10 @@ func InitDB() {
 		}
 
 		settings := model.PlatformSettings{
-			ID: 1, Name: "EduPlatform",
-			DescriptionID: "Platform belajar teknologi 100% gratis untuk semua.",
-			DescriptionEN: "A 100% free technology learning platform for everyone.",
-			SupportEmail:  "support@eduplatform.id", DefaultLocale: "id", CertificateIssuer: "EduPlatform",
+			ID: 1, Name: "EduCourse",
+			DescriptionID: "Platform belajar teknologi gratis dengan materi terarah, latihan praktik, kuis, proyek, dan sertifikat.",
+			DescriptionEN: "A free technology learning platform with structured lessons, hands-on practice, quizzes, projects, and certificates.",
+			SupportEmail:  "hendralatiefulm@gmail.com", DefaultLocale: "id", CertificateIssuer: "EduCourse",
 			NotifyNewRegistration: true, NotifyNewSubmission: true, NotifyGradePublished: true,
 		}
 		if err := DB.FirstOrCreate(&settings, model.PlatformSettings{ID: 1}).Error; err != nil {

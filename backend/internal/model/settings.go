@@ -10,13 +10,13 @@ import (
 // learning preferences. The application always uses row ID 1.
 type PlatformSettings struct {
 	ID                    uint      `gorm:"primaryKey;autoIncrement:false" json:"id"`
-	Name                  string    `gorm:"size:80;not null;default:EduPlatform" json:"name"`
+	Name                  string    `gorm:"size:80;not null;default:EduCourse" json:"name"`
 	DescriptionID         string    `gorm:"column:description;type:text;not null" json:"descriptionId"`
 	DescriptionEN         string    `gorm:"column:description_en;type:text;not null" json:"descriptionEn"`
 	SupportEmail          string    `gorm:"size:255;not null" json:"supportEmail"`
 	LogoURL               string    `gorm:"size:500" json:"logoUrl"`
 	DefaultLocale         string    `gorm:"size:5;not null;default:id;check:platform_default_locale,default_locale IN ('id','en')" json:"defaultLocale"`
-	CertificateIssuer     string    `gorm:"size:120;not null;default:EduPlatform" json:"certificateIssuer"`
+	CertificateIssuer     string    `gorm:"size:120;not null;default:EduCourse" json:"certificateIssuer"`
 	NotifyNewRegistration bool      `gorm:"not null;default:true" json:"notifyNewRegistration"`
 	NotifyNewSubmission   bool      `gorm:"not null;default:true" json:"notifyNewSubmission"`
 	NotifyGradePublished  bool      `gorm:"not null;default:true" json:"notifyGradePublished"`
